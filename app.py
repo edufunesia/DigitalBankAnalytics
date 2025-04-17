@@ -37,7 +37,41 @@ def fetch_app_info():
         app_packages = request.json.get('app_packages', DEFAULT_APP_PACKAGES)
         logger.debug(f"Fetching info for apps: {app_packages}")
         
-        app_infos = get_app_info(app_packages)
+        # Validate app packages - check if they're not empty and have valid format
+        validated_packages = []
+        invalid_packages = []
+        
+        for pkg in app_packages:
+            # Basic validation - ensure it's a string and has at least one period
+            if isinstance(pkg, str) and pkg.strip():
+                # If it's a URL, try to extract the package ID
+                if 'play.google.com' in pkg:
+                    # Try to extract package ID from URL
+                    import re
+                    match = re.search(r'id=([^&]+)', pkg)
+                    if match:
+                        pkg = match.group(1)
+                
+                # Simple format validation - most valid package names have at least one dot
+                # But allow custom apps without dots too (like 'instagram')
+                validated_packages.append(pkg)
+            else:
+                invalid_packages.append(pkg)
+        
+        if not validated_packages:
+            return jsonify({
+                'status': 'error',
+                'message': 'No valid app packages provided'
+            }), 400
+        
+        app_infos = get_app_info(validated_packages)
+        
+        # If no apps were found, return error
+        if not app_infos:
+            return jsonify({
+                'status': 'error',
+                'message': 'No app information found. Please check the app IDs or URLs provided.'
+            }), 404
         
         # Convert to dataframe for easy manipulation
         df = pd.DataFrame(app_infos)
@@ -47,7 +81,7 @@ def fetch_app_info():
         avg_rating = df['score'].mean()
         avg_reviews = df['reviews'].mean()
         
-        return jsonify({
+        response_data = {
             'status': 'success',
             'data': app_infos,
             'metrics': {
@@ -55,7 +89,16 @@ def fetch_app_info():
                 'avg_rating': round(avg_rating, 2),
                 'avg_reviews': int(avg_reviews)
             }
-        })
+        }
+        
+        # Add warning if some packages were invalid
+        if invalid_packages:
+            response_data['warnings'] = {
+                'invalid_packages': invalid_packages,
+                'message': 'Some app packages were invalid and were not processed'
+            }
+            
+        return jsonify(response_data)
     except Exception as e:
         logger.error(f"Error fetching app info: {str(e)}")
         return jsonify({
@@ -67,16 +110,59 @@ def fetch_app_info():
 def app_details(app_id):
     """View for detailed information about a specific app"""
     try:
-        app_info = get_app_info([app_id])[0]
+        # Validate app ID
+        if 'play.google.com' in app_id:
+            # Try to extract package ID from URL
+            import re
+            match = re.search(r'id=([^&]+)', app_id)
+            if match:
+                app_id = match.group(1)
+            else:
+                flash("Invalid app URL. Please provide a valid Google Play Store app URL or package ID.", "danger")
+                return redirect(url_for('index'))
+        
+        app_info_list = get_app_info([app_id])
+        
+        if not app_info_list:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+            
+        app_info = app_info_list[0]
         return render_template('app_details.html', app=app_info)
+    except IndexError:
+        flash(f"No information found for app: {app_id}", "danger")
+        return redirect(url_for('index'))
     except Exception as e:
+        logger.error(f"Error retrieving app details: {str(e)}")
         flash(f"Error retrieving app details: {str(e)}", "danger")
         return redirect(url_for('index'))
 
 @app.route('/app/<app_id>/reviews')
 def app_reviews(app_id):
     """View for app reviews with sentiment analysis"""
-    return render_template('app_reviews.html', app_id=app_id)
+    try:
+        # Validate app ID
+        if 'play.google.com' in app_id:
+            # Try to extract package ID from URL
+            import re
+            match = re.search(r'id=([^&]+)', app_id)
+            if match:
+                app_id = match.group(1)
+                # Redirect to the clean URL
+                return redirect(url_for('app_reviews', app_id=app_id))
+        
+        # Verify that the app exists by fetching its info
+        app_info_list = get_app_info([app_id])
+        
+        if not app_info_list:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+            
+        return render_template('app_reviews.html', app_id=app_id, app_name=app_info_list[0]['title'])
+    except Exception as e:
+        logger.error(f"Error accessing app reviews: {str(e)}")
+        flash(f"Error accessing app reviews: {str(e)}", "danger")
+        return redirect(url_for('index'))
 
 @app.route('/fetch_app_reviews', methods=['POST'])
 def fetch_app_reviews():

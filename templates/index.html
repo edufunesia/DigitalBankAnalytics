@@ -11,6 +11,20 @@
                 <p class="card-text">
                     Analyze Google Play Store data for banking apps, including ratings, reviews, and sentiment analysis.
                 </p>
+                
+                <!-- Add custom app section -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="customAppUrl" class="form-control" 
+                            placeholder="Enter Play Store app URL or package ID (e.g., com.instagram.android)" 
+                            aria-label="Add custom app">
+                        <button id="addCustomAppBtn" class="btn btn-success">
+                            <i class="fas fa-plus me-1"></i> Add App
+                        </button>
+                    </div>
+                    <div class="form-text">Example: https://play.google.com/store/apps/details?id=com.instagram.android</div>
+                </div>
+                
                 <button id="fetchDataBtn" class="btn btn-primary">
                     <i class="fas fa-download me-1"></i> Fetch App Data
                 </button>
@@ -115,7 +129,40 @@
     </div>
 </div>
 
-<!-- App package list -->
+<!-- Custom apps list -->
+<div id="customAppsContainer" class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Apps to Analyze</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm" id="appListTable">
+                        <thead>
+                            <tr>
+                                <th>Package ID</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appListTableBody">
+                            {% for package in app_packages %}
+                            <tr>
+                                <td>{{ package }}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-danger remove-app-btn" data-app-id="{{ package }}">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- App package list (hidden) -->
 <div class="d-none">
     <ul id="appPackages">
         {% for package in app_packages %}
@@ -131,13 +178,146 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Get app packages from the hidden list
     const appPackagesList = document.querySelectorAll('#appPackages li');
-    const appPackages = Array.from(appPackagesList).map(li => li.textContent.trim());
+    let appPackages = Array.from(appPackagesList).map(li => li.textContent.trim());
+    
+    // Attach event listeners to all remove app buttons
+    document.querySelectorAll('.remove-app-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const appId = this.getAttribute('data-app-id');
+            const row = this.closest('tr');
+            removeApp(appId, row);
+        });
+    });
     
     // Fetch data button event listener
     const fetchDataBtn = document.getElementById('fetchDataBtn');
     fetchDataBtn.addEventListener('click', function() {
         fetchAppData(appPackages);
     });
+    
+    // Function to remove an app from the list
+    function removeApp(appId, row) {
+        // Remove from array
+        const index = appPackages.indexOf(appId);
+        if (index > -1) {
+            appPackages.splice(index, 1);
+        }
+        
+        // Remove from hidden list
+        const hiddenItems = document.querySelectorAll('#appPackages li');
+        hiddenItems.forEach(item => {
+            if (item.textContent.trim() === appId) {
+                item.remove();
+            }
+        });
+        
+        // Remove from visible table
+        row.remove();
+        
+        // Show notification
+        const notification = document.createElement('div');
+        notification.className = 'alert alert-info alert-dismissible fade show mt-2';
+        notification.innerHTML = `
+            <strong>Removed!</strong> App "${appId}" has been removed from the list.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        document.getElementById('customAppsContainer').querySelector('.card-body').appendChild(notification);
+        
+        // Auto-dismiss after 3 seconds
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+    
+    // Add custom app button event listener
+    const addCustomAppBtn = document.getElementById('addCustomAppBtn');
+    const customAppUrlInput = document.getElementById('customAppUrl');
+    
+    addCustomAppBtn.addEventListener('click', function() {
+        addCustomApp();
+    });
+    
+    customAppUrlInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            addCustomApp();
+        }
+    });
+    
+    function addCustomApp() {
+        const appUrl = customAppUrlInput.value.trim();
+        if (!appUrl) {
+            alert('Please enter a valid Play Store app URL or package ID.');
+            return;
+        }
+        
+        let appId = appUrl;
+        
+        // If it's a URL, extract the package ID
+        if (appUrl.includes('play.google.com')) {
+            const urlParams = new URLSearchParams(appUrl.split('?')[1]);
+            const extractedId = urlParams.get('id');
+            
+            if (extractedId) {
+                appId = extractedId;
+            } else {
+                alert('Unable to extract package ID from URL. Please enter a valid Play Store URL.');
+                return;
+            }
+        }
+        
+        // Check if app is already in the list
+        if (appPackages.includes(appId)) {
+            alert('This app is already in the list.');
+            return;
+        }
+        
+        // Add app to the list
+        appPackages.push(appId);
+        
+        // Add to hidden list
+        const listContainer = document.getElementById('appPackages');
+        const newItem = document.createElement('li');
+        newItem.textContent = appId;
+        listContainer.appendChild(newItem);
+        
+        // Add to visible table
+        const tableBody = document.getElementById('appListTableBody');
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${appId}</td>
+            <td class="text-end">
+                <button class="btn btn-sm btn-danger remove-app-btn" data-app-id="${appId}">
+                    <i class="fas fa-trash"></i> Remove
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+        
+        // Add event listener to the new remove button
+        row.querySelector('.remove-app-btn').addEventListener('click', function() {
+            removeApp(appId, row);
+        });
+        
+        // Show success message
+        const successAlert = document.createElement('div');
+        successAlert.className = 'alert alert-success alert-dismissible fade show mt-2';
+        successAlert.innerHTML = `
+            <strong>Success!</strong> Added app "${appId}" to the list.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        const inputGroup = customAppUrlInput.parentElement.parentElement;
+        inputGroup.appendChild(successAlert);
+        
+        // Auto-dismiss after 3 seconds
+        setTimeout(() => {
+            successAlert.remove();
+        }, 3000);
+        
+        // Clear input
+        customAppUrlInput.value = '';
+    }
     
     function fetchAppData(packages) {
         // Show loading spinner
