@@ -4,9 +4,44 @@ import numpy as np
 import re
 import string
 import nltk
+import threading
+import time
+from queue import Queue
 from textblob import TextBlob
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
+
+# Define a timeout function to prevent stemming from hanging
+def stem_with_timeout(stemmer, word, timeout=1.0):
+    """Stem a word with a timeout to prevent hanging"""
+    result_queue = Queue()
+    
+    def worker():
+        try:
+            result_queue.put(stemmer.stem(word))
+        except Exception as e:
+            result_queue.put(str(e))
+    
+    # Start worker thread
+    thread = threading.Thread(target=worker)
+    thread.daemon = True
+    thread.start()
+    
+    # Wait for result with timeout
+    thread.join(timeout)
+    
+    # If thread is still alive after timeout, it's hanging
+    if thread.is_alive():
+        return word, True  # Return original word and timeout flag
+    
+    # Otherwise, get result
+    if not result_queue.empty():
+        result = result_queue.get()
+        if isinstance(result, str) and result.startswith('Error:'):
+            return word, False  # Return original word with error flag
+        return result, False  # Return stemmed word with no timeout
+    
+    return word, False  # Fallback to original word
 
 # Download NLTK resources if not already available
 try:
@@ -80,8 +115,23 @@ def preprocess_reviews(reviews):
             # Step 6: Remove stopwords
             filtered_tokens = [word for word in tokens if word not in all_stopwords]
             
-            # Step 7: Stemming with Sastrawi
-            stemmed_tokens = [stemmer.stem(word) for word in filtered_tokens]
+            # Step 7: Stemming with Sastrawi (with error handling and timeout)
+            stemmed_tokens = []
+            for word in filtered_tokens:
+                try:
+                    # Skip very short words (likely not Indonesian)
+                    if len(word) <= 2:
+                        stemmed_tokens.append(word)
+                    else:
+                        # Use threaded stemmer with timeout
+                        stemmed_word, timed_out = stem_with_timeout(stemmer, word, timeout=1.0)
+                        stemmed_tokens.append(stemmed_word)
+                        
+                        if timed_out:
+                            logger.warning(f"Stemming timed out for word: {word}")
+                except Exception as e:
+                    logger.error(f"Error stemming word '{word}': {str(e)}")
+                    stemmed_tokens.append(word)  # Use original word if stemming fails
             
             # Step 8: Join tokens back to text
             preprocessed_text = ' '.join(stemmed_tokens)
