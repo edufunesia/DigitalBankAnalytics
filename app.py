@@ -194,13 +194,15 @@ def fetch_app_reviews():
         reviews = get_app_reviews(app_id, count=count, sort=sort)
         
         # Process reviews with sentiment analysis
-        processed_reviews = preprocess_reviews(reviews)
-        sentiment_results = analyze_sentiment(processed_reviews)
+        processed_texts, preprocessing_details = preprocess_reviews(reviews)
+        sentiment_results = analyze_sentiment(processed_texts)
         
-        # Combine reviews with sentiment scores
+        # Combine reviews with sentiment scores and preprocessing details
         for i, review in enumerate(reviews):
             review['sentiment_score'] = sentiment_results[i].polarity
             review['sentiment_label'] = 'positive' if sentiment_results[i].polarity > 0 else ('negative' if sentiment_results[i].polarity < 0 else 'neutral')
+            review['preprocessing'] = preprocessing_details[i]
+            review['processed_text'] = processed_texts[i]
         
         # Calculate sentiment metrics
         sentiment_counts = {
@@ -209,10 +211,35 @@ def fetch_app_reviews():
             'negative': sum(1 for r in reviews if r['sentiment_label'] == 'negative')
         }
         
+        # Calculate preprocessing metrics
+        total_token_count = sum(detail['original_token_count'] for detail in preprocessing_details if detail['original_token_count'] > 0)
+        processed_token_count = sum(detail['processed_token_count'] for detail in preprocessing_details if detail['processed_token_count'] > 0)
+        removed_token_count = total_token_count - processed_token_count
+        
+        preprocessing_metrics = {
+            'total_token_count': total_token_count,
+            'processed_token_count': processed_token_count,
+            'removed_token_count': removed_token_count,
+            'reduction_percentage': int((removed_token_count / total_token_count * 100) if total_token_count > 0 else 0)
+        }
+        
+        # Get most common removed stopwords 
+        all_removed_stopwords = []
+        for detail in preprocessing_details:
+            all_removed_stopwords.extend(detail.get('removed_stopwords', []))
+        
+        # Count occurrences of each stopword
+        from collections import Counter
+        stopword_counts = Counter(all_removed_stopwords)
+        top_stopwords = [{"word": word, "count": count} for word, count in stopword_counts.most_common(10)]
+        
+        preprocessing_metrics['top_stopwords'] = top_stopwords
+        
         return jsonify({
             'status': 'success',
             'data': reviews,
-            'sentiment_metrics': sentiment_counts
+            'sentiment_metrics': sentiment_counts,
+            'preprocessing_metrics': preprocessing_metrics
         })
     except Exception as e:
         logger.error(f"Error fetching app reviews: {str(e)}")

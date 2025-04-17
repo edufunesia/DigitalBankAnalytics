@@ -71,6 +71,81 @@
     <p class="mt-2">Analyzing reviews, please wait...</p>
 </div>
 
+<!-- Preprocessing Analysis -->
+<div id="preprocessingContainer" class="row mb-4 d-none">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">Text Preprocessing</h3>
+                <p class="text-muted">Review text preprocessing for Indonesian language</p>
+                
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <h5>Preprocessing Steps</h5>
+                        <ol>
+                            <li>Convert text to lowercase</li>
+                            <li>Remove URLs, punctuation and special characters</li>
+                            <li>Remove numbers</li>
+                            <li>Tokenization (splitting text into words)</li>
+                            <li>Remove stopwords (common words like "yang", "dan", "untuk")</li>
+                            <li>Apply stemming with PySastrawi (reduce words to their root form)</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5 class="card-title">Token Reduction</h5>
+                                <div class="text-center">
+                                    <div class="h1 mb-0" id="reductionPercentage">0%</div>
+                                    <p class="text-muted">Words removed</p>
+                                    <div class="row mt-3">
+                                        <div class="col-6 border-end">
+                                            <div class="h4" id="originalTokenCount">0</div>
+                                            <p class="text-muted small">Original</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="h4" id="processedTokenCount">0</div>
+                                            <p class="text-muted small">After Processing</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Top Removed Stopwords</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Word</th>
+                                        <th>Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="topStopwordsTable">
+                                    <!-- Content will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Preprocessing Example</h5>
+                        <div id="preprocessingExample" class="border rounded p-3">
+                            <p><strong>Original:</strong> <span id="exampleOriginal"></span></p>
+                            <p><strong>After Tokenization:</strong> <span id="exampleTokenization"></span></p>
+                            <p><strong>After Stopword Removal:</strong> <span id="exampleStopwordRemoval"></span></p>
+                            <p><strong>After Stemming:</strong> <span id="exampleStemming"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Sentiment analysis -->
 <div id="sentimentContainer" class="row mb-4 d-none">
     <div class="col-12">
@@ -181,6 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('loadingContainer').classList.remove('d-none');
         
         // Hide other containers
+        document.getElementById('preprocessingContainer').classList.add('d-none');
         document.getElementById('sentimentContainer').classList.add('d-none');
         document.getElementById('reviewsContainer').classList.add('d-none');
         
@@ -200,6 +276,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('neutralCount').textContent = data.sentiment_metrics.neutral;
                 document.getElementById('negativeCount').textContent = data.sentiment_metrics.negative;
                 
+                // Update preprocessing metrics
+                if (data.preprocessing_metrics) {
+                    document.getElementById('originalTokenCount').textContent = data.preprocessing_metrics.total_token_count.toLocaleString();
+                    document.getElementById('processedTokenCount').textContent = data.preprocessing_metrics.processed_token_count.toLocaleString();
+                    document.getElementById('reductionPercentage').textContent = data.preprocessing_metrics.reduction_percentage + '%';
+                    
+                    // Populate stopwords table
+                    const stopwordsTableBody = document.getElementById('topStopwordsTable');
+                    stopwordsTableBody.innerHTML = '';
+                    
+                    if (data.preprocessing_metrics.top_stopwords && data.preprocessing_metrics.top_stopwords.length > 0) {
+                        data.preprocessing_metrics.top_stopwords.forEach(item => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${item.word}</td>
+                                <td>${item.count}</td>
+                            `;
+                            stopwordsTableBody.appendChild(row);
+                        });
+                    }
+                    
+                    // Find a good example review to show preprocessing
+                    const goodExample = findGoodPreprocessingExample(data.data);
+                    if (goodExample && goodExample.preprocessing) {
+                        document.getElementById('exampleOriginal').textContent = goodExample.preprocessing.original;
+                        document.getElementById('exampleTokenization').textContent = goodExample.preprocessing.after_tokenization;
+                        document.getElementById('exampleStopwordRemoval').textContent = goodExample.preprocessing.after_stopword_removal;
+                        document.getElementById('exampleStemming').textContent = goodExample.preprocessing.after_stemming;
+                    }
+                }
+                
                 // Create sentiment chart
                 createSentimentChart('sentimentChart', data.sentiment_metrics);
                 
@@ -207,6 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 populateReviewsTable(data.data);
                 
                 // Show containers
+                document.getElementById('preprocessingContainer').classList.remove('d-none');
                 document.getElementById('sentimentContainer').classList.remove('d-none');
                 document.getElementById('reviewsContainer').classList.remove('d-none');
             } else {
@@ -344,6 +452,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 row.style.display = 'none';
             }
         });
+    }
+    
+    /**
+     * Find a good review example to show the preprocessing steps
+     * A good example is one with Indonesian text, enough tokens, and significant processing
+     */
+    function findGoodPreprocessingExample(reviews) {
+        // First try to find a review with Indonesian language
+        const indonesianReviews = reviews.filter(review => {
+            // Look for reviews with Indonesian common words
+            const commonIndonesianWords = ['yang', 'dan', 'untuk', 'tidak', 'dengan', 'ini', 'di', 'ada', 'saya', 'bisa'];
+            const hasIndonesianWord = commonIndonesianWords.some(word => 
+                review.content && review.content.toLowerCase().includes(word)
+            );
+            return hasIndonesianWord && 
+                   review.preprocessing && 
+                   review.preprocessing.original.length > 50 &&
+                   review.preprocessing.original_token_count > 10;
+        });
+        
+        if (indonesianReviews.length > 0) {
+            // Sort by most tokens removed (most processing done)
+            return indonesianReviews.sort((a, b) => {
+                const tokenReductionA = a.preprocessing.original_token_count - a.preprocessing.processed_token_count;
+                const tokenReductionB = b.preprocessing.original_token_count - b.preprocessing.processed_token_count;
+                return tokenReductionB - tokenReductionA;
+            })[0];
+        }
+        
+        // If no Indonesian reviews found, just use the longest review available
+        return reviews.sort((a, b) => {
+            return (b.preprocessing?.original_token_count || 0) - (a.preprocessing?.original_token_count || 0);
+        })[0];
     }
     
     // Initial fetch
