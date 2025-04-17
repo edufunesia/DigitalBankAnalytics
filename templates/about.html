@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block title %}About - Banking App Analyzer{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="card-title">About this Project</h1>
+                <p class="card-text">
+                    The Banking App Analyzer is a tool for scraping, analyzing, and visualizing Google Play Store
+                    data for banking applications. It provides insights into app ratings, reviews, and user sentiment.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="card-title">Features</h2>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="fas fa-mobile-alt text-primary me-2"></i>
+                        Google Play Store data scraping for banking apps
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-comments text-primary me-2"></i>
+                        Review collection and analysis
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-smile text-primary me-2"></i>
+                        Sentiment analysis of user reviews
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-chart-bar text-primary me-2"></i>
+                        Data visualization with charts and graphs
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-table text-primary me-2"></i>
+                        Interactive data tables
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="card-title">Technologies Used</h2>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="fab fa-python text-primary me-2"></i>
+                        <strong>Backend:</strong> Python with Flask
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-screwdriver text-primary me-2"></i>
+                        <strong>Scraping:</strong> google-play-scraper
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-brain text-primary me-2"></i>
+                        <strong>Sentiment Analysis:</strong> TextBlob
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-table text-primary me-2"></i>
+                        <strong>Data Processing:</strong> Pandas
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fab fa-js text-primary me-2"></i>
+                        <strong>Frontend:</strong> HTML, CSS, JavaScript, Bootstrap 5
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-chart-line text-primary me-2"></i>
+                        <strong>Visualization:</strong> Chart.js, DataTables.js
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title">How It Works</h2>
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-download fa-3x text-primary mb-3"></i>
+                                <h4>1. Data Collection</h4>
+                                <p class="card-text">
+                                    Using google-play-scraper to fetch app information and reviews from the Google Play Store.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-cogs fa-3x text-primary mb-3"></i>
+                                <h4>2. Processing & Analysis</h4>
+                                <p class="card-text">
+                                    Processing the data and performing sentiment analysis on user reviews.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-chart-pie fa-3x text-primary mb-3"></i>
+                                <h4>3. Visualization</h4>
+                                <p class="card-text">
+                                    Presenting the data through interactive tables, charts, and dashboards.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,345 @@
+{% extends 'base.html' %}
+
+{% block title %}App Reviews{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('app_details', app_id=app_id) }}">App Details</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Reviews</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title">Reviews Analysis</h2>
+                <p class="card-text">Review and sentiment analysis for app: <strong id="appName">{{ app_id }}</strong></p>
+                
+                <div class="mb-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <div class="d-flex align-items-center">
+                                <label for="reviewCount" class="form-label me-2 mb-0">Number of reviews:</label>
+                                <select id="reviewCount" class="form-select" style="width: auto;">
+                                    <option value="50">50</option>
+                                    <option value="100" selected>100</option>
+                                    <option value="200">200</option>
+                                    <option value="300">300</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <label for="sortOrder" class="form-label me-2 mb-0">Sort by:</label>
+                                <select id="sortOrder" class="form-select" style="width: auto;">
+                                    <option value="most_relevant" selected>Most Relevant</option>
+                                    <option value="newest">Newest</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="fetchReviewsBtn" class="btn btn-primary">
+                    <i class="fas fa-sync-alt me-1"></i> Fetch Reviews
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading spinner -->
+<div id="loadingContainer" class="text-center my-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-2">Analyzing reviews, please wait...</p>
+</div>
+
+<!-- Sentiment analysis -->
+<div id="sentimentContainer" class="row mb-4 d-none">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">Sentiment Analysis</h3>
+                <div class="row">
+                    <div class="col-lg-6">
+                        <canvas id="sentimentChart" height="250"></canvas>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="row h-100 align-items-center">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <div class="h3 text-success" id="positiveCount">0</div>
+                                    <div>Positive</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <div class="h3 text-warning" id="neutralCount">0</div>
+                                    <div>Neutral</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <div class="h3 text-danger" id="negativeCount">0</div>
+                                    <div>Negative</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reviews table -->
+<div id="reviewsContainer" class="row d-none">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">Reviews</h3>
+                
+                <!-- Filters -->
+                <div class="mb-3">
+                    <div class="btn-group" role="group" aria-label="Filter reviews">
+                        <button type="button" class="btn btn-outline-primary active" data-filter="all">All</button>
+                        <button type="button" class="btn btn-outline-success" data-filter="positive">Positive</button>
+                        <button type="button" class="btn btn-outline-warning" data-filter="neutral">Neutral</button>
+                        <button type="button" class="btn btn-outline-danger" data-filter="negative">Negative</button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table id="reviewsTable" class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Rating</th>
+                                <th>Review</th>
+                                <th>Sentiment</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reviewsTableBody">
+                            <!-- Reviews will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const appId = '{{ app_id }}';
+    let sentimentChart = null;
+    
+    // Fetch reviews button
+    document.getElementById('fetchReviewsBtn').addEventListener('click', function() {
+        const count = document.getElementById('reviewCount').value;
+        const sort = document.getElementById('sortOrder').value;
+        fetchReviews(appId, count, sort);
+    });
+    
+    // Filter buttons
+    document.querySelectorAll('[data-filter]').forEach(button => {
+        button.addEventListener('click', function() {
+            // Update active button
+            document.querySelectorAll('[data-filter]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // Apply filter
+            const filter = this.getAttribute('data-filter');
+            filterReviews(filter);
+        });
+    });
+    
+    function fetchReviews(appId, count, sort) {
+        // Show loading spinner
+        document.getElementById('loadingContainer').classList.remove('d-none');
+        
+        // Hide other containers
+        document.getElementById('sentimentContainer').classList.add('d-none');
+        document.getElementById('reviewsContainer').classList.add('d-none');
+        
+        // Fetch reviews
+        fetch('/fetch_app_reviews', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ app_id: appId, count: parseInt(count), sort: sort }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Update sentiment metrics
+                document.getElementById('positiveCount').textContent = data.sentiment_metrics.positive;
+                document.getElementById('neutralCount').textContent = data.sentiment_metrics.neutral;
+                document.getElementById('negativeCount').textContent = data.sentiment_metrics.negative;
+                
+                // Create sentiment chart
+                createSentimentChart('sentimentChart', data.sentiment_metrics);
+                
+                // Display reviews
+                populateReviewsTable(data.data);
+                
+                // Show containers
+                document.getElementById('sentimentContainer').classList.remove('d-none');
+                document.getElementById('reviewsContainer').classList.remove('d-none');
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while fetching reviews.');
+        })
+        .finally(() => {
+            // Hide loading spinner
+            document.getElementById('loadingContainer').classList.add('d-none');
+        });
+    }
+    
+    function createSentimentChart(canvasId, sentimentMetrics) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (sentimentChart) {
+            sentimentChart.destroy();
+        }
+        
+        // Create new chart
+        sentimentChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Positive', 'Neutral', 'Negative'],
+                datasets: [{
+                    data: [
+                        sentimentMetrics.positive,
+                        sentimentMetrics.neutral,
+                        sentimentMetrics.negative
+                    ],
+                    backgroundColor: [
+                        'rgba(40, 167, 69, 0.8)',
+                        'rgba(255, 193, 7, 0.8)',
+                        'rgba(220, 53, 69, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(40, 167, 69, 1)',
+                        'rgba(255, 193, 7, 1)',
+                        'rgba(220, 53, 69, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+    
+    function populateReviewsTable(reviews) {
+        const tableBody = document.getElementById('reviewsTableBody');
+        tableBody.innerHTML = '';
+        
+        reviews.forEach(review => {
+            const row = document.createElement('tr');
+            row.classList.add('review-row');
+            row.setAttribute('data-sentiment', review.sentiment_label);
+            
+            // Format date
+            const reviewDate = new Date(review.at);
+            const formattedDate = reviewDate.toLocaleDateString();
+            
+            // Star rating HTML
+            let starsHtml = '';
+            for (let i = 1; i <= 5; i++) {
+                if (i <= review.score) {
+                    starsHtml += '<i class="fas fa-star text-warning"></i>';
+                } else {
+                    starsHtml += '<i class="far fa-star text-warning"></i>';
+                }
+            }
+            
+            // Sentiment badge class
+            let sentimentClass = 'bg-warning';
+            if (review.sentiment_label === 'positive') {
+                sentimentClass = 'bg-success';
+            } else if (review.sentiment_label === 'negative') {
+                sentimentClass = 'bg-danger';
+            }
+            
+            row.innerHTML = `
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar me-2">
+                            ${review.userName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>${review.userName}</div>
+                    </div>
+                </td>
+                <td>${starsHtml}</td>
+                <td>${review.content}</td>
+                <td>
+                    <span class="badge ${sentimentClass}">
+                        ${review.sentiment_label.charAt(0).toUpperCase() + review.sentiment_label.slice(1)}
+                        (${review.sentiment_score.toFixed(2)})
+                    </span>
+                </td>
+                <td>${formattedDate}</td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Initialize DataTable
+        if ($.fn.DataTable.isDataTable('#reviewsTable')) {
+            $('#reviewsTable').DataTable().destroy();
+        }
+        
+        $('#reviewsTable').DataTable({
+            responsive: true,
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50],
+            order: [[3, 'desc']]  // Sort by sentiment by default
+        });
+    }
+    
+    function filterReviews(filter) {
+        const rows = document.querySelectorAll('.review-row');
+        
+        rows.forEach(row => {
+            if (filter === 'all' || row.getAttribute('data-sentiment') === filter) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+    
+    // Initial fetch
+    fetchReviews(appId, 100, 'most_relevant');
+});
+</script>
+{% endblock %}

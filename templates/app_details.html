@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ app.title }} - Details{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ app.title }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <img src="{{ app.icon }}" alt="{{ app.title }}" class="img-fluid mb-3" style="max-width: 120px;">
+                <h2 class="card-title">{{ app.title }}</h2>
+                <p class="text-muted">{{ app.developer }}</p>
+                
+                <div class="d-flex justify-content-center align-items-center mb-3">
+                    <span class="h4 mb-0 me-2">{{ app.score|round(1) }}</span>
+                    <div class="ratings">
+                        {% for i in range(5) %}
+                            {% if i < app.score|int %}
+                                <i class="fas fa-star text-warning"></i>
+                            {% elif i < app.score|round(0, 'common') %}
+                                <i class="fas fa-star-half-alt text-warning"></i>
+                            {% else %}
+                                <i class="far fa-star text-warning"></i>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <span class="text-muted ms-2">({{ app.reviews|format_number }})</span>
+                </div>
+                
+                <div class="mb-3">
+                    <span class="badge bg-primary me-1">{{ app.genre }}</span>
+                    <span class="badge bg-secondary">{{ app.contentRating }}</span>
+                </div>
+                
+                <a href="{{ app.url }}" target="_blank" class="btn btn-success">
+                    <i class="fab fa-google-play me-1"></i> View on Play Store
+                </a>
+                
+                <a href="{{ url_for('app_reviews', app_id=app.appId) }}" class="btn btn-info mt-2">
+                    <i class="fas fa-comments me-1"></i> View Reviews
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h3 class="card-title">App Information</h3>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="small text-muted">Installs</div>
+                        <div class="h5">{{ app.installs|format_number }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="small text-muted">Last Updated</div>
+                        <div class="h5">{{ app.updated|date }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="small text-muted">Current Version</div>
+                        <div class="h5">{{ app.version }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="small text-muted">Size</div>
+                        <div class="h5">{{ app.size }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="small text-muted">Minimum Android</div>
+                        <div class="h5">{{ app.androidVersion }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="small text-muted">Content Rating</div>
+                        <div class="h5">{{ app.contentRating }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                <h3 class="card-title">Description</h3>
+                <p class="card-text">{{ app.description }}</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">Rating Distribution</h3>
+                <div class="mb-3">
+                    <canvas id="ratingsDistributionChart"></canvas>
+                </div>
+                <div class="row text-center">
+                    {% for i in range(5, 0, -1) %}
+                    <div class="col">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="me-2">{{ i }} <i class="fas fa-star text-warning"></i></div>
+                            <div class="progress flex-grow-1">
+                                <div class="progress-bar bg-success" 
+                                     style="width: {{ (app.ratings.get(i|string, 0) / app.reviews * 100) if app.reviews else 0 }}%">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if app.screenshots %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">Screenshots</h3>
+                <div class="row">
+                    {% for screenshot in app.screenshots[:6] %}
+                    <div class="col-md-4 col-sm-6 mb-3">
+                        <a href="{{ screenshot }}" target="_blank">
+                            <img src="{{ screenshot }}" alt="Screenshot {{ loop.index }}" class="img-fluid rounded">
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Ratings distribution chart
+    const ratingsData = {
+        '5': {{ app.ratings.get('5', 0) }},
+        '4': {{ app.ratings.get('4', 0) }},
+        '3': {{ app.ratings.get('3', 0) }},
+        '2': {{ app.ratings.get('2', 0) }},
+        '1': {{ app.ratings.get('1', 0) }}
+    };
+    
+    const ctx = document.getElementById('ratingsDistributionChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['5 ★', '4 ★', '3 ★', '2 ★', '1 ★'],
+            datasets: [{
+                label: 'Number of Ratings',
+                data: [ratingsData['5'], ratingsData['4'], ratingsData['3'], ratingsData['2'], ratingsData['1']],
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.8)',
+                    'rgba(76, 174, 76, 0.8)',
+                    'rgba(255, 193, 7, 0.8)',
+                    'rgba(255, 144, 0, 0.8)',
+                    'rgba(220, 53, 69, 0.8)'
+                ],
+                borderColor: [
+                    'rgba(40, 167, 69, 1)',
+                    'rgba(76, 174, 76, 1)',
+                    'rgba(255, 193, 7, 1)',
+                    'rgba(255, 144, 0, 1)',
+                    'rgba(220, 53, 69, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

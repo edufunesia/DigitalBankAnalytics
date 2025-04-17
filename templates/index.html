@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+
+{% block title %}Banking App Analyzer - Home{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="card-title">Banking App Analyzer</h1>
+                <p class="card-text">
+                    Analyze Google Play Store data for banking apps, including ratings, reviews, and sentiment analysis.
+                </p>
+                <button id="fetchDataBtn" class="btn btn-primary">
+                    <i class="fas fa-download me-1"></i> Fetch App Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading spinner -->
+<div id="loadingContainer" class="text-center my-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-2">Fetching app data, please wait...</p>
+</div>
+
+<!-- Overview metrics -->
+<div id="overviewContainer" class="row mb-4 d-none">
+    <div class="col-12">
+        <h2 class="mb-3">Overview</h2>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-mobile-alt me-2"></i> Apps Analyzed
+                        </h5>
+                        <p class="card-text display-4" id="appCount">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-star me-2"></i> Average Rating
+                        </h5>
+                        <p class="card-text display-4" id="avgRating">0.0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-info text-white h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-comments me-2"></i> Average Reviews
+                        </h5>
+                        <p class="card-text display-4" id="avgReviews">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- App charts -->
+<div id="chartsContainer" class="row mb-4 d-none">
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Ratings Comparison</h5>
+                <canvas id="ratingsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Downloads Comparison</h5>
+                <canvas id="downloadsChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- App details table -->
+<div id="appDataContainer" class="row d-none">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title mb-3">Banking Apps</h2>
+                <div class="table-responsive">
+                    <table id="appDataTable" class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>App</th>
+                                <th>Developer</th>
+                                <th>Rating</th>
+                                <th>Reviews</th>
+                                <th>Installs</th>
+                                <th>Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appTableBody">
+                            <!-- Data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- App package list -->
+<div class="d-none">
+    <ul id="appPackages">
+        {% for package in app_packages %}
+        <li>{{ package }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get app packages from the hidden list
+    const appPackagesList = document.querySelectorAll('#appPackages li');
+    const appPackages = Array.from(appPackagesList).map(li => li.textContent.trim());
+    
+    // Fetch data button event listener
+    const fetchDataBtn = document.getElementById('fetchDataBtn');
+    fetchDataBtn.addEventListener('click', function() {
+        fetchAppData(appPackages);
+    });
+    
+    function fetchAppData(packages) {
+        // Show loading spinner
+        document.getElementById('loadingContainer').classList.remove('d-none');
+        
+        // Hide other containers
+        document.getElementById('overviewContainer').classList.add('d-none');
+        document.getElementById('chartsContainer').classList.add('d-none');
+        document.getElementById('appDataContainer').classList.add('d-none');
+        
+        // Fetch app data
+        fetch('/fetch_app_info', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ app_packages: packages }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Update overview metrics
+                document.getElementById('appCount').textContent = data.metrics.app_count;
+                document.getElementById('avgRating').textContent = data.metrics.avg_rating;
+                document.getElementById('avgReviews').textContent = data.metrics.avg_reviews.toLocaleString();
+                
+                // Display app data
+                populateAppTable(data.data);
+                
+                // Create charts
+                createRatingsChart('ratingsChart', data.data);
+                createDownloadsChart('downloadsChart', data.data);
+                
+                // Show containers
+                document.getElementById('overviewContainer').classList.remove('d-none');
+                document.getElementById('chartsContainer').classList.remove('d-none');
+                document.getElementById('appDataContainer').classList.remove('d-none');
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while fetching data.');
+        })
+        .finally(() => {
+            // Hide loading spinner
+            document.getElementById('loadingContainer').classList.add('d-none');
+        });
+    }
+    
+    function populateAppTable(appData) {
+        const tableBody = document.getElementById('appTableBody');
+        tableBody.innerHTML = '';
+        
+        appData.forEach(app => {
+            const row = document.createElement('tr');
+            
+            // Format date
+            const updatedDate = new Date(app.updated);
+            const formattedDate = updatedDate.toLocaleDateString();
+            
+            row.innerHTML = `
+                <td>
+                    <div class="d-flex align-items-center">
+                        <img src="${app.icon}" alt="${app.title}" class="app-icon me-2" width="40" height="40">
+                        <div>
+                            <div class="fw-bold">${app.title}</div>
+                            <div class="small text-muted">${app.appId}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>${app.developer}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <span class="me-1">${app.score.toFixed(1)}</span>
+                        <i class="fas fa-star text-warning"></i>
+                    </div>
+                </td>
+                <td>${app.reviews.toLocaleString()}</td>
+                <td>${app.installs.toLocaleString()}</td>
+                <td>${formattedDate}</td>
+                <td>
+                    <a href="/app/${app.appId}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-info-circle"></i> Details
+                    </a>
+                    <a href="/app/${app.appId}/reviews" class="btn btn-sm btn-info">
+                        <i class="fas fa-comments"></i> Reviews
+                    </a>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Initialize DataTable
+        if ($.fn.DataTable.isDataTable('#appDataTable')) {
+            $('#appDataTable').DataTable().destroy();
+        }
+        
+        $('#appDataTable').DataTable({
+            responsive: true,
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50],
+            order: [[2, 'desc']]  // Sort by rating by default
+        });
+    }
+});
+</script>
+{% endblock %}
