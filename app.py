@@ -5,6 +5,7 @@ from scraper import get_app_info, get_app_reviews
 from analysis import analyze_sentiment, preprocess_reviews
 import pandas as pd
 import json
+import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -13,6 +14,22 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev_secret_key")
+
+# Custom template filters
+@app.template_filter('format_number')
+def format_number(value):
+    """Format large numbers with commas as thousands separators"""
+    return "{:,}".format(value) if value else 0
+
+@app.template_filter('date')
+def format_date(value):
+    """Format datetime to readable date"""
+    if isinstance(value, (int, float)):
+        # Convert timestamp to datetime
+        dt = datetime.datetime.fromtimestamp(value / 1000)
+    else:
+        dt = value
+    return dt.strftime('%B %d, %Y') if dt else ""
 
 # Default banking app packages to analyze
 DEFAULT_APP_PACKAGES = [
