@@ -74,8 +74,9 @@
                         <div class="d-flex align-items-center mb-2">
                             <div class="me-2">{{ i }} <i class="fas fa-star text-warning"></i></div>
                             <div class="progress flex-grow-1">
+                                {% set rating_count = app.ratings[i|string] if app.ratings is mapping and i|string in app.ratings else 0 %}
                                 <div class="progress-bar bg-success" 
-                                     style="width: {{ (app.ratings.get(i|string, 0) / app.reviews * 100) if app.reviews else 0 }}%">
+                                     style="width: {{ (rating_count / app.reviews * 100) if app.reviews else 0 }}%">
                                 </div>
                             </div>
                         </div>
