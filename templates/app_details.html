@@ -21,7 +21,7 @@
                 <img src="{{ app.icon }}" alt="{{ app.title }}" class="img-fluid mb-3" style="max-width: 120px;">
                 <h2 class="card-title">{{ app.title }}</h2>
                 <p class="text-muted">{{ app.developer }}</p>
-                
+
                 <div class="d-flex justify-content-center align-items-center mb-3">
                     <span class="h4 mb-0 me-2">{{ app.score|round(1) }}</span>
                     <div class="ratings">
@@ -37,63 +37,31 @@
                     </div>
                     <span class="text-muted ms-2">({{ app.reviews|format_number }})</span>
                 </div>
-                
+
                 <div class="mb-3">
                     <span class="badge bg-primary me-1">{{ app.genre }}</span>
                     <span class="badge bg-secondary">{{ app.contentRating }}</span>
                 </div>
-                
+
                 <a href="{{ app.url }}" target="_blank" class="btn btn-success">
                     <i class="fab fa-google-play me-1"></i> View on Play Store
                 </a>
-                
+
                 <a href="{{ url_for('app_reviews', app_id=app.appId) }}" class="btn btn-info mt-2">
                     <i class="fas fa-comments me-1"></i> View Reviews
                 </a>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-8">
-        <div class="card mb-4">
-            <div class="card-body">
-                <h3 class="card-title">App Information</h3>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <div class="small text-muted">Installs</div>
-                        <div class="h5">{{ app.installs|format_number }}</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="small text-muted">Last Updated</div>
-                        <div class="h5">{{ app.updated|date }}</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="small text-muted">Current Version</div>
-                        <div class="h5">{{ app.version }}</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="small text-muted">Size</div>
-                        <div class="h5">{{ app.size }}</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="small text-muted">Minimum Android</div>
-                        <div class="h5">{{ app.androidVersion }}</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="small text-muted">Content Rating</div>
-                        <div class="h5">{{ app.contentRating }}</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
         <div class="card mb-4">
             <div class="card-body">
                 <h3 class="card-title">Description</h3>
                 <p class="card-text">{{ app.description }}</p>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-body">
                 <h3 class="card-title">Rating Distribution</h3>
@@ -126,11 +94,9 @@
             <div class="card-body">
                 <h3 class="card-title">Screenshots</h3>
                 <div class="row">
-                    {% for screenshot in app.screenshots[:6] %}
-                    <div class="col-md-4 col-sm-6 mb-3">
-                        <a href="{{ screenshot }}" target="_blank">
-                            <img src="{{ screenshot }}" alt="Screenshot {{ loop.index }}" class="img-fluid rounded">
-                        </a>
+                    {% for screenshot in app.screenshots %}
+                    <div class="col-md-4 mb-3">
+                        <img src="{{ screenshot }}" alt="Screenshot" class="img-fluid rounded">
                     </div>
                     {% endfor %}
                 </div>
