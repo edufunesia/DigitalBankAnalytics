@@ -76,7 +76,7 @@
                             <div class="progress flex-grow-1">
                                 {% set rating_count = app.ratings[i|string] if app.ratings is mapping and i|string in app.ratings else 0 %}
                                 <div class="progress-bar bg-success" 
-                                     style="width: {{ (rating_count / app.reviews * 100) if app.reviews else 0 }}%">
+                                     style="width: {{ (rating_count / app.reviews * 100) if app.reviews and app.reviews > 0 else 0 }}%">
                                 </div>
                             </div>
                         </div>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
         '2': {{ app.ratings.get('2', 0) }},
         '1': {{ app.ratings.get('1', 0) }}
     };
-    
+
     const ctx = document.getElementById('ratingsDistributionChart').getContext('2d');
     new Chart(ctx, {
         type: 'bar',
