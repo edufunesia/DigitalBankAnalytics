@@ -113,11 +113,11 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Ratings distribution chart
     const ratingsData = {
-        '5': {{ app.ratings.get('5', 0) }},
-        '4': {{ app.ratings.get('4', 0) }},
-        '3': {{ app.ratings.get('3', 0) }},
-        '2': {{ app.ratings.get('2', 0) }},
-        '1': {{ app.ratings.get('1', 0) }}
+        '5': {{ app.ratings['5'] if app.ratings is mapping and '5' in app.ratings else 0 }},
+        '4': {{ app.ratings['4'] if app.ratings is mapping and '4' in app.ratings else 0 }},
+        '3': {{ app.ratings['3'] if app.ratings is mapping and '3' in app.ratings else 0 }},
+        '2': {{ app.ratings['2'] if app.ratings is mapping and '2' in app.ratings else 0 }},
+        '1': {{ app.ratings['1'] if app.ratings is mapping and '1' in app.ratings else 0 }}
     };
 
     const ctx = document.getElementById('ratingsDistributionChart').getContext('2d');
