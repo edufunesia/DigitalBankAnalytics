@@ -50,29 +50,36 @@ def get_app_reviews(app_package, count=100, score=None, sort='most_relevant'):
             scores = [score]
         else:
             scores = list(range(1, 6))
-            
+        
+        # Reduce reviews per score to avoid timeout    
+        per_score_count = min(20, count // len(scores))
+        
         for score_filter in scores:
-            logger.debug(f"Fetching reviews for {app_package} with score {score_filter}")
-            
-            # Calculate how many reviews to fetch per score to maintain roughly equal distribution
-            per_score_count = count // len(scores)
-            
-            rvs, _ = reviews(
-                app_package,
-                lang='id',
-                country='id',
-                sort=sort_order,
-                count=per_score_count,
-                filter_score_with=score_filter
-            )
-            
-            for r in rvs:
-                r['sortOrder'] = 'most_relevant' if sort_order == Sort.MOST_RELEVANT else 'newest'
-                r['appId'] = app_package
+            try:
+                logger.debug(f"Fetching reviews for {app_package} with score {score_filter}")
                 
-            app_reviews.extend(rvs)
+                rvs, _ = reviews(
+                    app_package,
+                    lang='id',
+                    country='id',
+                    sort=sort_order,
+                    count=per_score_count,
+                    filter_score_with=score_filter,
+                    timeout=30  # Add timeout
+                )
+                
+                for r in rvs:
+                    if r and isinstance(r, dict):
+                        r['sortOrder'] = 'most_relevant' if sort_order == Sort.MOST_RELEVANT else 'newest'
+                        r['appId'] = app_package
+                        app_reviews.append(r)
+                
+            except Exception as e:
+                logger.warning(f"Error fetching reviews for score {score_filter}: {str(e)}")
+                continue
             
     except Exception as e:
         logger.error(f"Error fetching reviews for app {app_package}: {str(e)}")
+        raise
     
-    return app_reviews
+    return app_reviews[:count]  # Ensure we don't exceed requested count
