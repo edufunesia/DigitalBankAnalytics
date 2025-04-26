@@ -64,8 +64,7 @@ def get_app_reviews(app_package, count=100, score=None, sort='most_relevant'):
                     country='id',
                     sort=sort_order,
                     count=per_score_count,
-                    filter_score_with=score_filter,
-                    timeout=30  # Add timeout
+                    filter_score_with=score_filter
                 )
                 
                 for r in rvs:
