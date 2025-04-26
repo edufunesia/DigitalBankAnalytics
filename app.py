@@ -186,12 +186,23 @@ def fetch_app_reviews():
     """API endpoint to fetch app reviews with sentiment analysis"""
     try:
         app_id = request.json.get('app_id')
-        count = request.json.get('count', 50)
+        if not app_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'App ID is required'
+            }), 400
+            
+        count = min(int(request.json.get('count', 50)), 200)  # Limit max reviews
         sort = request.json.get('sort', 'most_relevant')
         
         logger.debug(f"Fetching reviews for app: {app_id}, count: {count}, sort: {sort}")
         
         reviews = get_app_reviews(app_id, count=count, sort=sort)
+        if not reviews:
+            return jsonify({
+                'status': 'error',
+                'message': 'No reviews found or error fetching reviews'
+            }), 404
         
         # Process reviews with sentiment analysis
         processed_texts, preprocessing_details = preprocess_reviews(reviews)

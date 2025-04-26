@@ -43,6 +43,11 @@ def get_app_reviews(app_package, count=100, score=None, sort='most_relevant'):
     app_reviews = []
     
     try:
+        # Validate input parameters
+        if not app_package:
+            logger.error("App package name is required")
+            return []
+            
         sort_order = Sort.MOST_RELEVANT if sort == 'most_relevant' else Sort.NEWEST
         
         # If score is provided, filter by that score
@@ -51,21 +56,31 @@ def get_app_reviews(app_package, count=100, score=None, sort='most_relevant'):
         else:
             scores = list(range(1, 6))
         
-        # Reduce reviews per score to avoid timeout    
-        per_score_count = min(20, count // len(scores))
+        # Reduce reviews per score and add delay between requests
+        per_score_count = min(10, count // len(scores))
         
         for score_filter in scores:
             try:
                 logger.debug(f"Fetching reviews for {app_package} with score {score_filter}")
                 
-                rvs, _ = reviews(
-                    app_package,
-                    lang='id',
-                    country='id',
-                    sort=sort_order,
-                    count=per_score_count,
-                    filter_score_with=score_filter
-                )
+                # Add more specific error handling for the reviews fetch
+                try:
+                    rvs, continuation_token = reviews(
+                        app_package,
+                        lang='id',
+                        country='id',
+                        sort=sort_order,
+                        count=per_score_count,
+                        filter_score_with=score_filter
+                    )
+                    
+                    if not rvs:
+                        logger.warning(f"No reviews found for score {score_filter}")
+                        continue
+                        
+                except Exception as e:
+                    logger.error(f"Error in reviews API call: {str(e)}")
+                    continue
                 
                 for r in rvs:
                     if r and isinstance(r, dict):
