@@ -12,36 +12,32 @@ from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 
 # Define a timeout function to prevent stemming from hanging
-def stem_with_timeout(stemmer, word, timeout=1.0):
+def stem_with_timeout(stemmer, word, timeout=0.5):
     """Stem a word with a timeout to prevent hanging"""
+    # Skip stemming for very short words or non-alphabetic strings
+    if len(word) <= 3 or not word.isalpha():
+        return word, False
+
     result_queue = Queue()
     
     def worker():
         try:
-            result_queue.put(stemmer.stem(word))
+            result = stemmer.stem(word)
+            result_queue.put(result)
         except Exception as e:
-            result_queue.put(str(e))
+            result_queue.put(word)  # Return original word on error
     
     # Start worker thread
     thread = threading.Thread(target=worker)
     thread.daemon = True
     thread.start()
     
-    # Wait for result with timeout
-    thread.join(timeout)
-    
-    # If thread is still alive after timeout, it's hanging
-    if thread.is_alive():
-        return word, True  # Return original word and timeout flag
-    
-    # Otherwise, get result
-    if not result_queue.empty():
-        result = result_queue.get()
-        if isinstance(result, str) and result.startswith('Error:'):
-            return word, False  # Return original word with error flag
-        return result, False  # Return stemmed word with no timeout
-    
-    return word, False  # Fallback to original word
+    try:
+        # Wait for result with timeout
+        result = result_queue.get(timeout=timeout)
+        return result, False
+    except:
+        return word, True  # Return original word on timeout
 
 # Download NLTK resources if not already available
 try:
