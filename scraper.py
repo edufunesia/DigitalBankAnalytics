@@ -1,35 +1,31 @@
-import logging
-from tqdm import tqdm
-from google_play_scraper import Sort, reviews, app
 
+from google_play_scraper import app, Sort, reviews
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 def get_app_info(app_packages):
     """
-    Scrape basic information about apps from Google Play Store
+    Scrape app information from Google Play Store
     
     Args:
-        app_packages (list): List of app package names to scrape
+        app_packages (list): List of app package names
         
     Returns:
         list: List of dictionaries containing app information
     """
-    app_infos = []
+    app_info_list = []
     
-    for ap in tqdm(app_packages):
+    for package in app_packages:
         try:
-            logger.debug(f"Fetching info for app: {ap}")
-            info = app(ap, lang='id', country='id')
-            
-            # Clean up the data before storing
-            if 'comments' in info:
-                del info['comments']
-                
-            app_infos.append(info)
+            result = app(package, lang='id', country='id')
+            app_info_list.append(result)
         except Exception as e:
-            logger.error(f"Error fetching info for app {ap}: {str(e)}")
+            logger.error(f"Error fetching info for app {package}: {str(e)}")
     
-    return app_infos
+    return app_info_list
 
 def get_app_reviews(app_package, count=100, score=None, sort='most_relevant'):
     """
