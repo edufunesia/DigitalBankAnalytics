@@ -1,0 +1,6 @@
+Flask
+Flask-SQLAlchemy
+google-play-scraper
+pandas
+numpy
+sastrawi
