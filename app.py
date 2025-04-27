@@ -3,6 +3,7 @@ import logging
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from .scraper import get_app_info, get_app_reviews
 from .analysis import analyze_sentiment, preprocess_reviews
+from .models import db, ScrapedApp, ScrapedReview
 import pandas as pd
 import json
 import datetime
@@ -13,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = os.environ.get("SESSION_SECRET", "dev_secret_key")
 
 # Custom template filters
@@ -89,6 +92,17 @@ def fetch_app_info():
                 'status': 'error',
                 'message': 'No app information found. Please check the app IDs or URLs provided.'
             }), 404
+        
+         # Save the app info into the database
+        with app.app_context():
+            for app_info in app_infos:
+
+                scraped_app = ScrapedApp(**app_info)
+                existing_app = ScrapedApp.query.get(scraped_app.app_id)
+                if not existing_app:
+                    db.session.add(scraped_app)
+            db.session.commit()
+            
         
         # Convert to dataframe for easy manipulation
         df = pd.DataFrame(app_infos)
@@ -204,6 +218,21 @@ def fetch_app_reviews():
                 'message': 'No reviews found or error fetching reviews'
             }), 404
         
+        # Save the reviews info into the database
+        with app.app_context():
+            for review in reviews:
+                new_review = ScrapedReview(
+                    app_id = app_id,
+                    review_id = review['reviewId'],
+                    user_name = review['userName'],
+                    rating = review['score'],
+                    text = review['content'],
+                    date = datetime.datetime.fromtimestamp(review['at'] / 1000)
+                )
+                db.session.add(new_review)
+            db.session.commit()
+
+        
         # Process reviews with sentiment analysis
         processed_texts, preprocessing_details = preprocess_reviews(reviews)
         sentiment_results = analyze_sentiment(processed_texts)
@@ -270,4 +299,8 @@ def preprocessing():
     return render_template('preprocessing.html')
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
+    app.run(host="0.0.0.0", port=5002, debug=True)
+
