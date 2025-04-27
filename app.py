@@ -264,5 +264,10 @@ def about():
     """About page with information about the project"""
     return render_template('about.html')
 
+@app.route('/preprocessing')
+def preprocessing():
+    """Page to show the preprocessing step by step"""
+    return render_template('preprocessing.html')
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
