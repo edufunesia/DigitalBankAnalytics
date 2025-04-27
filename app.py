@@ -1,8 +1,8 @@
 import os
 import logging
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
-from scraper import get_app_info, get_app_reviews
-from analysis import analyze_sentiment, preprocess_reviews
+from .scraper import get_app_info, get_app_reviews
+from .analysis import analyze_sentiment, preprocess_reviews
 import pandas as pd
 import json
 import datetime
