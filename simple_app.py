@@ -44,18 +44,144 @@ def format_date(value):
 
 @app.route('/')
 def index():
-    """Homepage with app list"""
-    return "Simple App Running - Use /app/{app_id}/reviews to test review fetching"
+    """Homepage with app search form"""
+    # Get recently analyzed apps from database
+    try:
+        with app.app_context():
+            # Get distinct app_ids from the database
+            recent_apps = db.session.query(ScrapedReview.app_id).distinct().limit(5).all()
+
+            # Format for template
+            recent_apps_list = []
+            for app_id in recent_apps:
+                # Try to get app info
+                try:
+                    app_info = get_app_info([app_id[0]])
+                    if app_info:
+                        recent_apps_list.append({
+                            'id': app_id[0],
+                            'name': app_info[0]['title']
+                        })
+                    else:
+                        recent_apps_list.append({
+                            'id': app_id[0],
+                            'name': app_id[0]
+                        })
+                except:
+                    # If we can't get app info, just use the ID
+                    recent_apps_list.append({
+                        'id': app_id[0],
+                        'name': app_id[0]
+                    })
+    except Exception as e:
+        logger.error(f"Error getting recent apps: {str(e)}")
+        recent_apps_list = []
+
+    return render_template('simple_index.html', recent_apps=recent_apps_list)
+
+@app.route('/search', methods=['POST'])
+def search_app():
+    """Search for an app and redirect to its reviews page"""
+    app_id = request.form.get('app_id')
+    review_count = request.form.get('review_count', '100')
+
+    if not app_id:
+        flash("Please enter an app ID", "danger")
+        return redirect(url_for('index'))
+
+    # Clean up app_id
+    app_id = app_id.strip()
+
+    # If it's a URL, extract the ID
+    if 'play.google.com' in app_id and 'id=' in app_id:
+        try:
+            app_id = app_id.split('id=')[1].split('&')[0]
+        except:
+            flash("Invalid Google Play URL. Please enter a valid app ID or URL.", "danger")
+            return redirect(url_for('index'))
+
+    # Verify that the app exists
+    try:
+        app_info = get_app_info([app_id])
+        if not app_info:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+    except Exception as e:
+        logger.error(f"Error verifying app: {str(e)}")
+        flash(f"Error verifying app: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+    # Validate review count
+    try:
+        review_count = int(review_count)
+        if review_count not in [100, 200, 300]:
+            review_count = 100  # Default to 100 if invalid value
+    except:
+        review_count = 100  # Default to 100 if conversion fails
+
+    # Store review count in session for later use
+    session = getattr(request, 'session', None)
+    if session:
+        session['review_count'] = review_count
+
+    # Redirect to the app reviews page
+    flash(f"Found app: {app_info[0]['title']} - Fetching {review_count} reviews", "success")
+    return redirect(url_for('app_reviews', app_id=app_id, count=review_count))
+
+@app.route('/app_info/<app_id>')
+def app_info(app_id):
+    """API endpoint to fetch app information"""
+    try:
+        # Clean up app_id if it has query parameters
+        if '?' in app_id:
+            app_id = app_id.split('?')[0]
+
+        # Fetch app info
+        app_info_list = get_app_info([app_id])
+
+        if not app_info_list:
+            return jsonify({
+                'status': 'error',
+                'message': f'No information found for app: {app_id}'
+            }), 404
+
+        # Return app info
+        return jsonify({
+            'status': 'success',
+            'app_info': app_info_list[0]
+        })
+    except Exception as e:
+        logger.error(f"Error fetching app info: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error fetching app info: {str(e)}'
+        }), 500
 
 @app.route('/app/<app_id>/reviews')
 def app_reviews(app_id):
     """Page to display app reviews with sentiment analysis"""
     try:
+        # Get review count from query parameters or session
+        review_count = request.args.get('count', None)
+        if not review_count:
+            session = getattr(request, 'session', None)
+            if session and 'review_count' in session:
+                review_count = session['review_count']
+            else:
+                review_count = 100  # Default value
+
+        try:
+            review_count = int(review_count)
+            if review_count not in [100, 200, 300]:
+                review_count = 100  # Default to 100 if invalid value
+        except:
+            review_count = 100  # Default to 100 if conversion fails
+
         # Clean up app_id if it has query parameters
         if '?' in app_id:
             app_id = app_id.split('?')[0]
             # Redirect to the clean URL
-            return redirect(url_for('app_reviews', app_id=app_id))
+            return redirect(url_for('app_reviews', app_id=app_id, count=review_count))
 
         # Verify that the app exists by fetching its info
         app_info_list = get_app_info([app_id])
@@ -64,7 +190,7 @@ def app_reviews(app_id):
             flash(f"No information found for app: {app_id}", "danger")
             return redirect(url_for('index'))
 
-        return render_template('simple_reviews.html', app_id=app_id, app_name=app_info_list[0]['title'])
+        return render_template('simple_reviews.html', app_id=app_id, app_name=app_info_list[0]['title'], review_count=review_count)
     except Exception as e:
         logger.error(f"Error accessing app reviews: {str(e)}")
         flash(f"Error accessing app reviews: {str(e)}", "danger")
@@ -82,7 +208,7 @@ def fetch_app_reviews():
                 'message': 'App ID is required'
             }), 400
 
-        count = min(int(request.json.get('count', 50)), 200)  # Limit max reviews
+        count = min(int(request.json.get('count', 100)), 300)  # Limit max reviews to 300
         sort = request.json.get('sort', 'most_relevant')
 
         logger.debug(f"Fetching reviews for app: {app_id}, count: {count}, sort: {sort}")
@@ -207,7 +333,11 @@ def export_reviews_csv(app_id):
 
         if not reviews:
             # If no reviews in database, fetch them from Google Play
-            count = 100
+            # Try to get review count from session
+            session = getattr(request, 'session', None)
+            count = 100  # Default value
+            if session and 'review_count' in session:
+                count = session['review_count']
             sort = 'most_relevant'
             reviews_data = get_app_reviews(app_id, count=count, sort=sort)
 
@@ -286,7 +416,11 @@ def export_reviews_excel(app_id):
 
         if not reviews:
             # If no reviews in database, fetch them from Google Play
-            count = 100
+            # Try to get review count from session
+            session = getattr(request, 'session', None)
+            count = 100  # Default value
+            if session and 'review_count' in session:
+                count = session['review_count']
             sort = 'most_relevant'
             reviews_data = get_app_reviews(app_id, count=count, sort=sort)
 

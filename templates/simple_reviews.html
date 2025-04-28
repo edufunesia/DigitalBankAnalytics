@@ -4,9 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ app_name }} - Reviews</title>
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.2.9/css/responsive.bootstrap5.min.css">
+    <!-- Custom CSS -->
     <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .app-header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 2rem 0;
+            border-radius: 0 0 20px 20px;
+            margin-bottom: 2rem;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a0cb0 0%, #1565e0 100%);
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        .btn-success:hover {
+            background: linear-gradient(135deg, #218838 0%, #1aa179 100%);
+            transform: translateY(-2px);
+        }
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+        }
         .avatar {
             width: 40px;
             height: 40px;
@@ -18,21 +72,126 @@
             justify-content: center;
             font-weight: bold;
         }
-        .loading-spinner {
-            width: 3rem;
-            height: 3rem;
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+        .sentiment-metrics {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+        .metric-card {
+            flex: 1;
+            padding: 1.5rem;
+            border-radius: 15px;
+            color: white;
+            text-align: center;
+            margin: 0 0.5rem;
+        }
+        .metric-card.positive {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        .metric-card.neutral {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+        .metric-card.negative {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+        .metric-card h3 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .metric-card p {
+            font-size: 1.1rem;
+            margin-bottom: 0;
+        }
+        .filter-buttons {
+            margin-bottom: 1.5rem;
+        }
+        .filter-buttons .btn {
+            margin-right: 0.5rem;
+            border-radius: 20px;
+            padding: 8px 20px;
+        }
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter {
+            margin-bottom: 1rem;
+        }
+        .back-to-home {
+            margin-bottom: 1rem;
+        }
+        footer {
+            margin-top: 4rem;
+            padding: 2rem 0;
+            background-color: #f1f3f5;
+            color: #6c757d;
         }
     </style>
 </head>
 <body>
-    <div class="container mt-4">
-        <h1>{{ app_name }} - Reviews</h1>
+    <!-- Toast Container -->
+    <div class="toast-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="toast align-items-center text-white bg-{{ category }} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                {{ message }}
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
 
-        <!-- Export Button -->
-        <div class="mb-4">
-            <a href="{{ url_for('export_reviews_csv', app_id=app_id) }}" class="btn btn-success">
-                <i class="fas fa-file-csv"></i> Export to CSV
-            </a>
+    <!-- App Header -->
+    <div class="app-header">
+        <div class="container text-center">
+            <h1 class="display-5 fw-bold mb-2">{{ app_name }}</h1>
+            <p class="lead mb-0">Review Analysis</p>
+            <button id="viewAppDetailsBtn" class="btn btn-sm btn-light mt-3">
+                <i class="fas fa-info-circle me-1"></i> View App Details
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Back to Home Button and App ID Form -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Home
+                </a>
+            </div>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <form action="{{ url_for('search_app') }}" method="POST" class="d-flex flex-column">
+                    <div class="input-group mb-2">
+                        <input type="text" name="app_id" class="form-control" placeholder="Enter new app ID">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-1"></i> Analyze
+                        </button>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Review count selection">
+                        <input type="radio" class="btn-check" name="review_count" id="count100" value="100" checked>
+                        <label class="btn btn-outline-secondary" for="count100">100</label>
+
+                        <input type="radio" class="btn-check" name="review_count" id="count200" value="200">
+                        <label class="btn btn-outline-secondary" for="count200">200</label>
+
+                        <input type="radio" class="btn-check" name="review_count" id="count300" value="300">
+                        <label class="btn btn-outline-secondary" for="count300">300</label>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Loading Spinner -->
@@ -45,19 +204,47 @@
 
         <!-- Reviews Container -->
         <div id="reviewsContainer" class="d-none">
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Reviews</h5>
-                    <div>
-                        <button class="btn btn-sm btn-outline-primary filter-btn" data-filter="all">All</button>
-                        <button class="btn btn-sm btn-outline-success filter-btn" data-filter="positive">Positive</button>
-                        <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="neutral">Neutral</button>
-                        <button class="btn btn-sm btn-outline-danger filter-btn" data-filter="negative">Negative</button>
-                    </div>
+            <!-- Export Button -->
+            <div class="mb-4">
+                <a href="{{ url_for('export_reviews_csv', app_id=app_id) }}" class="btn btn-success">
+                    <i class="fas fa-file-csv me-2"></i>Export to CSV
+                </a>
+            </div>
+
+            <!-- Sentiment Metrics -->
+            <div class="sentiment-metrics">
+                <div class="metric-card negative">
+                    <i class="fas fa-frown mb-2" style="font-size: 1.5rem;"></i>
+                    <h3 id="negativeCount">0</h3>
+                    <p>Negative Reviews</p>
                 </div>
+                <div class="metric-card neutral">
+                    <i class="fas fa-meh mb-2" style="font-size: 1.5rem;"></i>
+                    <h3 id="neutralCount">0</h3>
+                    <p>Neutral Reviews</p>
+                </div>
+
+                <div class="metric-card positive">
+                    <i class="fas fa-smile mb-2" style="font-size: 1.5rem;"></i>
+                    <h3 id="positiveCount">0</h3>
+                    <p>Positive Reviews</p>
+                </div>
+            </div>
+
+            <!-- Filter Buttons -->
+            <div class="filter-buttons">
+                <button class="btn btn-outline-primary filter-btn active" data-filter="all">All Reviews</button>
+                <button class="btn btn-outline-success filter-btn" data-filter="positive">Positive Only</button>
+                <button class="btn btn-outline-warning filter-btn" data-filter="neutral">Neutral Only</button>
+                <button class="btn btn-outline-danger filter-btn" data-filter="negative">Negative Only</button>
+            </div>
+
+            <!-- Reviews Table -->
+            <div class="card">
                 <div class="card-body">
+                    <h2 class="card-title mb-4">Reviews</h2>
                     <div class="table-responsive">
-                        <table id="reviewsTable" class="table table-striped">
+                        <table id="reviewsTable" class="table table-striped table-hover" style="width:100%">
                             <thead>
                                 <tr>
                                     <th>User</th>
@@ -77,15 +264,117 @@
         </div>
     </div>
 
+    <!-- App Details Modal -->
+    <div class="modal fade" id="appDetailsModal" tabindex="-1" aria-labelledby="appDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appDetailsModalLabel">App Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <img id="appIcon" src="" alt="App Icon" class="img-fluid rounded mb-3" style="max-width: 150px;">
+                            <div class="d-grid gap-2">
+                                <a id="appStoreLink" href="#" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="fab fa-google-play me-1"></i> View on Play Store
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <h4 id="appTitle" class="mb-2"></h4>
+                            <p id="appDeveloper" class="text-muted mb-2"></p>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <div id="appRatingStars" class="me-2"></div>
+                                    <span id="appRating" class="fw-bold"></span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div id="appRatingBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-6 col-md-4">
+                                    <div class="border rounded p-2 text-center">
+                                        <small class="text-muted d-block">Downloads</small>
+                                        <span id="appDownloads" class="fw-bold"></span>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="border rounded p-2 text-center">
+                                        <small class="text-muted d-block">Category</small>
+                                        <span id="appCategory" class="fw-bold"></span>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4 mt-2 mt-md-0">
+                                    <div class="border rounded p-2 text-center">
+                                        <small class="text-muted d-block">Last Updated</small>
+                                        <span id="appUpdated" class="fw-bold"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6>Description</h6>
+                            <p id="appDescription" class="small text-muted" style="max-height: 150px; overflow-y: auto;"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center">
+        <div class="container">
+            <p>© 2023 App Review Analyzer. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.9/js/responsive.bootstrap5.min.js"></script>
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         const appId = "{{ app_id }}";
+        const reviewCount = parseInt("{{ review_count|default(100) }}");
+        let dataTable;
+        const appDetailsModal = new bootstrap.Modal(document.getElementById('appDetailsModal'));
+
+        // Initialize toasts
+        var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+        var toastList = toastElList.map(function(toastEl) {
+            var toast = new bootstrap.Toast(toastEl, {
+                autohide: true,
+                delay: 5000
+            });
+            toast.show();
+            return toast;
+        });
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(button => {
             button.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                // Add active class to clicked button
+                this.classList.add('active');
+
                 const filter = this.getAttribute('data-filter');
                 filterReviews(filter);
             });
@@ -107,16 +396,24 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
+                    // Update sentiment metrics
+                    document.getElementById('positiveCount').textContent = data.sentiment_metrics.positive;
+                    document.getElementById('neutralCount').textContent = data.sentiment_metrics.neutral;
+                    document.getElementById('negativeCount').textContent = data.sentiment_metrics.negative;
+
                     // Display reviews
                     populateReviewsTable(data.data);
                     document.getElementById('reviewsContainer').classList.remove('d-none');
+
+                    // Show success toast
+                    showToast('success', `Successfully loaded ${data.data.length} reviews for ${appId}`);
                 } else {
-                    alert('Error: ' + data.message);
+                    showToast('danger', 'Error: ' + data.message);
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while fetching reviews.');
+                showToast('danger', 'An error occurred while fetching reviews.');
             })
             .finally(() => {
                 // Hide loading spinner
@@ -189,22 +486,177 @@
 
                 tableBody.appendChild(row);
             });
-        }
 
-        function filterReviews(filter) {
-            const rows = document.querySelectorAll('.review-row');
+            // Initialize DataTable
+            if ($.fn.DataTable.isDataTable('#reviewsTable')) {
+                $('#reviewsTable').DataTable().destroy();
+            }
 
-            rows.forEach(row => {
-                if (filter === 'all' || row.getAttribute('data-sentiment') === filter) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+            dataTable = $('#reviewsTable').DataTable({
+                responsive: true,
+                pageLength: 10,
+                lengthMenu: [5, 10, 25, 50, 100],
+                language: {
+                    search: "_INPUT_",
+                    searchPlaceholder: "Search reviews...",
+                    lengthMenu: "Show _MENU_ reviews per page",
+                    info: "Showing _START_ to _END_ of _TOTAL_ reviews",
+                    infoEmpty: "Showing 0 to 0 of 0 reviews",
+                    infoFiltered: "(filtered from _MAX_ total reviews)"
+                },
+                dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>rtip'
             });
         }
 
-        // Initial fetch
-        fetchReviews(appId, 100, 'most_relevant');
+        function filterReviews(filter) {
+            if (dataTable) {
+                if (filter === 'all') {
+                    dataTable.search('').columns().search('').draw();
+                } else {
+                    dataTable.column(3).search(filter, true, false).draw();
+                }
+            } else {
+                // Fallback to basic filtering if DataTable is not initialized
+                const rows = document.querySelectorAll('.review-row');
+                rows.forEach(row => {
+                    if (filter === 'all' || row.getAttribute('data-sentiment') === filter) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+        }
+
+        function showToast(type, message) {
+            const toastContainer = document.querySelector('.toast-container');
+
+            const toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            `;
+
+            toastContainer.appendChild(toastEl);
+
+            const toast = new bootstrap.Toast(toastEl, {
+                autohide: true,
+                delay: 5000
+            });
+
+            toast.show();
+
+            // Remove toast from DOM after it's hidden
+            toastEl.addEventListener('hidden.bs.toast', function() {
+                toastEl.remove();
+            });
+        }
+
+        // View App Details button
+        document.getElementById('viewAppDetailsBtn').addEventListener('click', function() {
+            fetchAppDetails(appId);
+        });
+
+        function fetchAppDetails(appId) {
+            // Show loading state
+            const viewAppDetailsBtn = document.getElementById('viewAppDetailsBtn');
+            viewAppDetailsBtn.disabled = true;
+            viewAppDetailsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...';
+
+            // Make API call to fetch app details
+            fetch('/app_info/' + appId)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch app details');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        displayAppDetails(data.app_info, appId);
+                        appDetailsModal.show();
+                    } else {
+                        showToast('danger', data.message || 'Failed to fetch app details');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('danger', 'Error fetching app details: ' + error.message);
+                })
+                .finally(() => {
+                    // Reset button
+                    viewAppDetailsBtn.disabled = false;
+                    viewAppDetailsBtn.innerHTML = '<i class="fas fa-info-circle me-1"></i> View App Details';
+                });
+        }
+
+        function displayAppDetails(appInfo, appId) {
+            // Set app details in modal
+            document.getElementById('appTitle').textContent = appInfo.title || 'Unknown App';
+            document.getElementById('appDeveloper').textContent = appInfo.developer || '';
+            document.getElementById('appDescription').textContent = appInfo.description || 'No description available';
+            document.getElementById('appDownloads').textContent = appInfo.installs || 'Unknown';
+            document.getElementById('appCategory').textContent = appInfo.genre || 'Unknown';
+            document.getElementById('appUpdated').textContent = formatDate(appInfo.updated) || 'Unknown';
+
+            // Set app icon
+            const appIcon = document.getElementById('appIcon');
+            if (appInfo.icon) {
+                appIcon.src = appInfo.icon;
+                appIcon.style.display = 'block';
+            } else {
+                appIcon.style.display = 'none';
+            }
+
+            // Set app store link
+            const appStoreLink = document.getElementById('appStoreLink');
+            appStoreLink.href = `https://play.google.com/store/apps/details?id=${appId}`;
+
+            // Set rating
+            const rating = parseFloat(appInfo.score) || 0;
+            document.getElementById('appRating').textContent = rating.toFixed(1);
+            document.getElementById('appRatingBar').style.width = `${(rating / 5) * 100}%`;
+
+            // Generate rating stars
+            const appRatingStars = document.getElementById('appRatingStars');
+            appRatingStars.innerHTML = '';
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('i');
+                if (i <= Math.floor(rating)) {
+                    star.className = 'fas fa-star text-warning';
+                } else if (i - 0.5 <= rating) {
+                    star.className = 'fas fa-star-half-alt text-warning';
+                } else {
+                    star.className = 'far fa-star text-warning';
+                }
+                appRatingStars.appendChild(star);
+                if (i < 5) {
+                    appRatingStars.appendChild(document.createTextNode(' '));
+                }
+            }
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '';
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleDateString();
+            } catch (e) {
+                return timestamp.toString();
+            }
+        }
+
+        // Initial fetch with selected review count
+        fetchReviews(appId, reviewCount, 'most_relevant');
     });
     </script>
 </body>
