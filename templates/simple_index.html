@@ -162,13 +162,27 @@
             </div>
         </div>
 
+        <!-- Quick Links -->
+        <div class="row justify-content-center mb-5">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title mb-3">Quick Links</h5>
+                        <a href="{{ url_for('app_comparison') }}" class="btn btn-primary">
+                            <i class="fas fa-chart-bar me-2"></i>Compare Multiple Apps
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Features Section -->
         <div class="row mt-5">
             <div class="col-12 text-center mb-4">
                 <h2>Features</h2>
                 <p class="text-muted">Powerful tools to analyze app reviews</p>
             </div>
-            <div class="col-md-4 mb-4">
+            <div class="col-md-3 mb-4">
                 <div class="card h-100 p-4">
                     <div class="feature-icon mx-auto">
                         <i class="fas fa-chart-pie"></i>
@@ -177,7 +191,7 @@
                     <p class="text-muted text-center">Automatically analyze the sentiment of reviews to identify positive, neutral, and negative feedback.</p>
                 </div>
             </div>
-            <div class="col-md-4 mb-4">
+            <div class="col-md-3 mb-4">
                 <div class="card h-100 p-4">
                     <div class="feature-icon mx-auto">
                         <i class="fas fa-file-export"></i>
@@ -186,13 +200,22 @@
                     <p class="text-muted text-center">Export review data to CSV format for further analysis in your preferred tools.</p>
                 </div>
             </div>
-            <div class="col-md-4 mb-4">
+            <div class="col-md-3 mb-4">
                 <div class="card h-100 p-4">
                     <div class="feature-icon mx-auto">
                         <i class="fas fa-filter"></i>
                     </div>
                     <h3 class="h5 text-center">Advanced Filtering</h3>
                     <p class="text-muted text-center">Filter reviews by sentiment to focus on specific types of feedback.</p>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card h-100 p-4">
+                    <div class="feature-icon mx-auto">
+                        <i class="fas fa-balance-scale"></i>
+                    </div>
+                    <h3 class="h5 text-center">App Comparison</h3>
+                    <p class="text-muted text-center">Compare multiple apps side by side to see how they stack up against each other.</p>
                 </div>
             </div>
         </div>

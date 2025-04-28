@@ -502,6 +502,114 @@ def export_reviews_excel(app_id):
         flash(f"Error exporting reviews: {str(e)}", "danger")
         return redirect(url_for('app_reviews', app_id=app_id))
 
+@app.route('/comparison')
+def app_comparison():
+    """Page for comparing multiple apps"""
+    return render_template('app_comparison.html')
+
+@app.route('/fetch_app_reviews_for_comparison', methods=['POST'])
+def fetch_app_reviews_for_comparison():
+    """API endpoint to fetch app reviews for comparison"""
+    try:
+        app_id = request.json.get('app_id')
+        if not app_id:
+            logger.error("App ID is required but not provided")
+            return jsonify({
+                'status': 'error',
+                'message': 'App ID is required'
+            }), 400
+
+        count = min(int(request.json.get('count', 100)), 300)  # Limit max reviews to 300
+        sort = request.json.get('sort', 'most_relevant')
+
+        logger.debug(f"Fetching reviews for comparison - app: {app_id}, count: {count}, sort: {sort}")
+
+        # Fetch reviews from database first
+        with app.app_context():
+            db_reviews = ScrapedReview.query.filter_by(app_id=app_id).limit(count).all()
+
+        if db_reviews and len(db_reviews) >= count:
+            # Use database reviews if available
+            logger.debug(f"Using {len(db_reviews)} reviews from database for comparison")
+
+            # Convert to dictionary format
+            reviews = []
+            for review in db_reviews:
+                # Add sentiment based on rating
+                rating = review.rating
+                if rating >= 4:
+                    sentiment = 0.8  # Positive
+                    sentiment_label = 'positive'
+                elif rating <= 2:
+                    sentiment = -0.8  # Negative
+                    sentiment_label = 'negative'
+                else:
+                    sentiment = 0.0  # Neutral
+                    sentiment_label = 'neutral'
+
+                reviews.append({
+                    'reviewId': review.review_id,
+                    'userName': review.user_name,
+                    'score': review.rating,
+                    'content': review.text,
+                    'at': review.date.timestamp() * 1000 if review.date else None,
+                    'sentiment_score': sentiment,
+                    'sentiment_label': sentiment_label
+                })
+        else:
+            # Fetch from Google Play if not in database
+            try:
+                reviews = get_app_reviews(app_id, count=count, sort=sort)
+                logger.debug(f"Fetched {len(reviews)} reviews from Google Play for comparison")
+
+                if not reviews:
+                    logger.warning(f"No reviews found for app: {app_id}")
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'No reviews found or error fetching reviews'
+                    }), 404
+
+                # Add simple sentiment scores
+                for review in reviews:
+                    # Simple sentiment based on rating
+                    rating = review.get('score', 0)
+                    if rating >= 4:
+                        sentiment = 0.8  # Positive
+                    elif rating <= 2:
+                        sentiment = -0.8  # Negative
+                    else:
+                        sentiment = 0.0  # Neutral
+
+                    review['sentiment_score'] = sentiment
+                    review['sentiment_label'] = 'positive' if sentiment > 0 else ('negative' if sentiment < 0 else 'neutral')
+
+            except Exception as e:
+                logger.error(f"Error fetching reviews for comparison: {str(e)}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f"Failed to fetch reviews from Google Play: {str(e)}"
+                }), 500
+
+        # Calculate sentiment metrics
+        sentiment_counts = {
+            'positive': sum(1 for r in reviews if r.get('sentiment_label') == 'positive'),
+            'neutral': sum(1 for r in reviews if r.get('sentiment_label') == 'neutral'),
+            'negative': sum(1 for r in reviews if r.get('sentiment_label') == 'negative')
+        }
+
+        # Return the response
+        return jsonify({
+            'status': 'success',
+            'data': reviews,
+            'sentiment_metrics': sentiment_counts
+        })
+    except Exception as e:
+        logger.error(f"Unhandled error fetching app reviews for comparison: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f"Failed to fetch app reviews: {str(e)}"
+        }), 500
+
 if __name__ == '__main__':
     db.init_app(app)
     with app.app_context():

@@ -163,12 +163,17 @@
     </div>
 
     <div class="container">
-        <!-- Back to Home Button and App ID Form -->
+        <!-- Navigation Buttons -->
         <div class="row mb-4">
             <div class="col-md-12">
-                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-                    <i class="fas fa-arrow-left me-2"></i>Back to Home
-                </a>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i>Home
+                    </a>
+                    <a href="{{ url_for('app_comparison') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-balance-scale me-1"></i>Compare Apps
+                    </a>
+                </div>
             </div>
         </div>
         <div class="row mb-4">
