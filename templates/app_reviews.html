@@ -20,7 +20,7 @@
         <div class="card">
             <div class="card-body">
                 <h2 class="card-title">Reviews Analysis</h2>
-                <p class="card-text">Review and sentiment analysis for app: 
+                <p class="card-text">Review and sentiment analysis for app:
                     <strong id="appName">
                         {% if app_name is defined %}
                             {{ app_name }}
@@ -29,7 +29,7 @@
                         {% endif %}
                     </strong>
                 </p>
-                
+
                 <div class="mb-4">
                     <div class="row align-items-center">
                         <div class="col-md-6 mb-3 mb-md-0">
@@ -54,7 +54,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <button id="fetchReviewsBtn" class="btn btn-primary">
                     <i class="fas fa-sync-alt me-1"></i> Fetch Reviews
                 </button>
@@ -78,7 +78,7 @@
             <div class="card-body">
                 <h3 class="card-title">Text Preprocessing</h3>
                 <p class="text-muted">Review text preprocessing for Indonesian language</p>
-                
+
                 <div class="row mb-4">
                     <div class="col-md-8">
                         <h5>Preprocessing Steps</h5>
@@ -113,7 +113,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-6">
                         <h5>Top Removed Stopwords</h5>
@@ -190,7 +190,7 @@
         <div class="card">
             <div class="card-body">
                 <h3 class="card-title">Reviews</h3>
-                
+
                 <!-- Filters -->
                 <div class="mb-3">
                     <div class="btn-group" role="group" aria-label="Filter reviews">
@@ -200,7 +200,7 @@
                         <button type="button" class="btn btn-outline-danger" data-filter="negative">Negative</button>
                     </div>
                 </div>
-                
+
                 <div class="table-responsive">
                     <table id="reviewsTable" class="table table-striped">
                         <thead>
@@ -228,14 +228,14 @@
 document.addEventListener('DOMContentLoaded', function() {
     const appId = '{{ app_id }}';
     let sentimentChart = null;
-    
+
     // Fetch reviews button
     document.getElementById('fetchReviewsBtn').addEventListener('click', function() {
         const count = document.getElementById('reviewCount').value;
         const sort = document.getElementById('sortOrder').value;
         fetchReviews(appId, count, sort);
     });
-    
+
     // Filter buttons
     document.querySelectorAll('[data-filter]').forEach(button => {
         button.addEventListener('click', function() {
@@ -244,22 +244,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.classList.remove('active');
             });
             this.classList.add('active');
-            
+
             // Apply filter
             const filter = this.getAttribute('data-filter');
             filterReviews(filter);
         });
     });
-    
+
     function fetchReviews(appId, count, sort) {
         // Show loading spinner
         document.getElementById('loadingContainer').classList.remove('d-none');
-        
+
         // Hide other containers
         document.getElementById('preprocessingContainer').classList.add('d-none');
         document.getElementById('sentimentContainer').classList.add('d-none');
         document.getElementById('reviewsContainer').classList.add('d-none');
-        
+
         // Fetch reviews
         fetch('/fetch_app_reviews', {
             method: 'POST',
@@ -275,17 +275,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('positiveCount').textContent = data.sentiment_metrics.positive;
                 document.getElementById('neutralCount').textContent = data.sentiment_metrics.neutral;
                 document.getElementById('negativeCount').textContent = data.sentiment_metrics.negative;
-                
+
                 // Update preprocessing metrics
                 if (data.preprocessing_metrics) {
                     document.getElementById('originalTokenCount').textContent = data.preprocessing_metrics.total_token_count.toLocaleString();
                     document.getElementById('processedTokenCount').textContent = data.preprocessing_metrics.processed_token_count.toLocaleString();
                     document.getElementById('reductionPercentage').textContent = data.preprocessing_metrics.reduction_percentage + '%';
-                    
+
                     // Populate stopwords table
                     const stopwordsTableBody = document.getElementById('topStopwordsTable');
                     stopwordsTableBody.innerHTML = '';
-                    
+
                     if (data.preprocessing_metrics.top_stopwords && data.preprocessing_metrics.top_stopwords.length > 0) {
                         data.preprocessing_metrics.top_stopwords.forEach(item => {
                             const row = document.createElement('tr');
@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             stopwordsTableBody.appendChild(row);
                         });
                     }
-                    
+
                     // Find a good example review to show preprocessing
                     const goodExample = findGoodPreprocessingExample(data.data);
                     if (goodExample && goodExample.preprocessing) {
@@ -306,13 +306,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('exampleStemming').textContent = goodExample.preprocessing.after_stemming;
                     }
                 }
-                
+
                 // Create sentiment chart
                 createSentimentChart('sentimentChart', data.sentiment_metrics);
-                
+
                 // Display reviews
                 populateReviewsTable(data.data);
-                
+
                 // Show containers
                 document.getElementById('preprocessingContainer').classList.remove('d-none');
                 document.getElementById('sentimentContainer').classList.remove('d-none');
@@ -330,15 +330,15 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loadingContainer').classList.add('d-none');
         });
     }
-    
+
     function createSentimentChart(canvasId, sentimentMetrics) {
         const ctx = document.getElementById(canvasId).getContext('2d');
-        
+
         // Destroy existing chart if it exists
         if (sentimentChart) {
             sentimentChart.destroy();
         }
-        
+
         // Create new chart
         sentimentChart = new Chart(ctx, {
             type: 'doughnut',
@@ -374,20 +374,32 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     function populateReviewsTable(reviews) {
         const tableBody = document.getElementById('reviewsTableBody');
         tableBody.innerHTML = '';
-        
+
         reviews.forEach(review => {
             const row = document.createElement('tr');
             row.classList.add('review-row');
             row.setAttribute('data-sentiment', review.sentiment_label);
-            
+
             // Format date
-            const reviewDate = new Date(review.at);
-            const formattedDate = reviewDate.toLocaleDateString();
-            
+            let formattedDate = '';
+            try {
+                // Check if review.at is a timestamp (number) or a string date
+                if (typeof review.at === 'number') {
+                    const reviewDate = new Date(review.at);
+                    formattedDate = reviewDate.toLocaleDateString();
+                } else if (review.at) {
+                    // If it's a string, try to parse it or just use it directly
+                    formattedDate = review.at;
+                }
+            } catch (e) {
+                console.error('Error formatting date:', e);
+                formattedDate = String(review.at || '');
+            }
+
             // Star rating HTML
             let starsHtml = '';
             for (let i = 1; i <= 5; i++) {
@@ -397,7 +409,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     starsHtml += '<i class="far fa-star text-warning"></i>';
                 }
             }
-            
+
             // Sentiment badge class
             let sentimentClass = 'bg-warning';
             if (review.sentiment_label === 'positive') {
@@ -405,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (review.sentiment_label === 'negative') {
                 sentimentClass = 'bg-danger';
             }
-            
+
             row.innerHTML = `
                 <td>
                     <div class="d-flex align-items-center">
@@ -425,15 +437,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td>${formattedDate}</td>
             `;
-            
+
             tableBody.appendChild(row);
         });
-        
+
         // Initialize DataTable
         if ($.fn.DataTable.isDataTable('#reviewsTable')) {
             $('#reviewsTable').DataTable().destroy();
         }
-        
+
         $('#reviewsTable').DataTable({
             responsive: true,
             pageLength: 10,
@@ -441,10 +453,10 @@ document.addEventListener('DOMContentLoaded', function() {
             order: [[3, 'desc']]  // Sort by sentiment by default
         });
     }
-    
+
     function filterReviews(filter) {
         const rows = document.querySelectorAll('.review-row');
-        
+
         rows.forEach(row => {
             if (filter === 'all' || row.getAttribute('data-sentiment') === filter) {
                 row.style.display = '';
@@ -453,7 +465,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     /**
      * Find a good review example to show the preprocessing steps
      * A good example is one with Indonesian text, enough tokens, and significant processing
@@ -463,15 +475,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const indonesianReviews = reviews.filter(review => {
             // Look for reviews with Indonesian common words
             const commonIndonesianWords = ['yang', 'dan', 'untuk', 'tidak', 'dengan', 'ini', 'di', 'ada', 'saya', 'bisa'];
-            const hasIndonesianWord = commonIndonesianWords.some(word => 
+            const hasIndonesianWord = commonIndonesianWords.some(word =>
                 review.content && review.content.toLowerCase().includes(word)
             );
-            return hasIndonesianWord && 
-                   review.preprocessing && 
+            return hasIndonesianWord &&
+                   review.preprocessing &&
                    review.preprocessing.original.length > 50 &&
                    review.preprocessing.original_token_count > 10;
         });
-        
+
         if (indonesianReviews.length > 0) {
             // Sort by most tokens removed (most processing done)
             return indonesianReviews.sort((a, b) => {
@@ -480,13 +492,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 return tokenReductionB - tokenReductionA;
             })[0];
         }
-        
+
         // If no Indonesian reviews found, just use the longest review available
         return reviews.sort((a, b) => {
             return (b.preprocessing?.original_token_count || 0) - (a.preprocessing?.original_token_count || 0);
         })[0];
     }
-    
+
     // Initial fetch
     fetchReviews(appId, 100, 'most_relevant');
 });

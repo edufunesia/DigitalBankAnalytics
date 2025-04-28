@@ -28,11 +28,25 @@ def format_number(value):
 def format_date(value):
     """Format datetime to readable date"""
     if isinstance(value, (int, float)):
-        # Convert timestamp to datetime
-        dt = datetime.datetime.fromtimestamp(value / 1000)
+        try:
+            # Convert timestamp to datetime (milliseconds)
+            dt = datetime.datetime.fromtimestamp(value / 1000)
+        except Exception:
+            try:
+                # Try as seconds if milliseconds fails
+                dt = datetime.datetime.fromtimestamp(value)
+            except Exception:
+                # If all conversions fail, return the original value
+                return str(value)
     else:
         dt = value
-    return dt.strftime('%B %d, %Y') if dt else ""
+
+    # Format the datetime object
+    try:
+        return dt.strftime('%B %d, %Y') if dt else ""
+    except Exception:
+        # If formatting fails, return the string representation
+        return str(dt) if dt else ""
 
 # Default banking app packages to analyze
 DEFAULT_APP_PACKAGES = [
@@ -56,11 +70,11 @@ def fetch_app_info():
     try:
         app_packages = request.json.get('app_packages', DEFAULT_APP_PACKAGES)
         logger.debug(f"Fetching info for apps: {app_packages}")
-        
+
         # Validate app packages - check if they're not empty and have valid format
         validated_packages = []
         invalid_packages = []
-        
+
         for pkg in app_packages:
             # Basic validation - ensure it's a string and has at least one period
             if isinstance(pkg, str) and pkg.strip():
@@ -71,47 +85,81 @@ def fetch_app_info():
                     match = re.search(r'id=([^&]+)', pkg)
                     if match:
                         pkg = match.group(1)
-                
+
                 # Simple format validation - most valid package names have at least one dot
                 # But allow custom apps without dots too (like 'instagram')
                 validated_packages.append(pkg)
             else:
                 invalid_packages.append(pkg)
-        
+
         if not validated_packages:
             return jsonify({
                 'status': 'error',
                 'message': 'No valid app packages provided'
             }), 400
-        
+
         app_infos = get_app_info(validated_packages)
-        
+
         # If no apps were found, return error
         if not app_infos:
             return jsonify({
                 'status': 'error',
                 'message': 'No app information found. Please check the app IDs or URLs provided.'
             }), 404
-        
+
          # Save the app info into the database
         with app.app_context():
             for app_info in app_infos:
+                # Extract only the fields that are in the ScrapedApp model
+                app_data = {
+                    'app_id': app_info.get('appId'),
+                    'title': app_info.get('title'),
+                    'developer': app_info.get('developer'),
+                    'description': app_info.get('description'),
+                    'summary': app_info.get('summary'),
+                    'score': app_info.get('score'),
+                    'reviews': app_info.get('reviews'),
+                    'installs': app_info.get('installs'),
+                    'minInstalls': app_info.get('minInstalls'),
+                    'maxInstalls': app_info.get('maxInstalls'),
+                    'free': app_info.get('free'),
+                    'price': app_info.get('price'),
+                    'currency': app_info.get('currency'),
+                    'size': app_info.get('size'),
+                    'androidVersion': app_info.get('androidVersion'),
+                    'developerId': app_info.get('developerId'),
+                    'developerEmail': app_info.get('developerEmail'),
+                    'developerWebsite': app_info.get('developerWebsite'),
+                    'developerAddress': app_info.get('developerAddress'),
+                    'privacyPolicy': app_info.get('privacyPolicy'),
+                    'genre': app_info.get('genre'),
+                    'genreId': app_info.get('genreId'),
+                    'icon': app_info.get('icon'),
+                    'headerImage': app_info.get('headerImage'),
+                    'contentRating': app_info.get('contentRating'),
+                    'adSupported': app_info.get('adSupported'),
+                    'containsAds': app_info.get('containsAds'),
+                    'released': app_info.get('released'),
+                    'updated': app_info.get('updated'),
+                    'version': app_info.get('version'),
+                    'recentChanges': app_info.get('recentChanges')
+                }
 
-                scraped_app = ScrapedApp(**app_info)
+                scraped_app = ScrapedApp(**app_data)
                 existing_app = ScrapedApp.query.get(scraped_app.app_id)
                 if not existing_app:
                     db.session.add(scraped_app)
             db.session.commit()
-            
-        
+
+
         # Convert to dataframe for easy manipulation
         df = pd.DataFrame(app_infos)
-        
+
         # Calculate additional metrics for overview
         app_count = len(df)
         avg_rating = df['score'].mean()
         avg_reviews = df['reviews'].mean()
-        
+
         response_data = {
             'status': 'success',
             'data': app_infos,
@@ -121,14 +169,14 @@ def fetch_app_info():
                 'avg_reviews': int(avg_reviews)
             }
         }
-        
+
         # Add warning if some packages were invalid
         if invalid_packages:
             response_data['warnings'] = {
                 'invalid_packages': invalid_packages,
                 'message': 'Some app packages were invalid and were not processed'
             }
-            
+
         return jsonify(response_data)
     except Exception as e:
         logger.error(f"Error fetching app info: {str(e)}")
@@ -151,13 +199,13 @@ def app_details(app_id):
             else:
                 flash("Invalid app URL. Please provide a valid Google Play Store app URL or package ID.", "danger")
                 return redirect(url_for('index'))
-        
+
         app_info_list = get_app_info([app_id])
-        
+
         if not app_info_list:
             flash(f"No information found for app: {app_id}", "danger")
             return redirect(url_for('index'))
-            
+
         app_info = app_info_list[0]
         return render_template('app_details.html', app=app_info)
     except IndexError:
@@ -181,14 +229,14 @@ def app_reviews(app_id):
                 app_id = match.group(1)
                 # Redirect to the clean URL
                 return redirect(url_for('app_reviews', app_id=app_id))
-        
+
         # Verify that the app exists by fetching its info
         app_info_list = get_app_info([app_id])
-        
+
         if not app_info_list:
             flash(f"No information found for app: {app_id}", "danger")
             return redirect(url_for('index'))
-            
+
         return render_template('app_reviews.html', app_id=app_id, app_name=app_info_list[0]['title'])
     except Exception as e:
         logger.error(f"Error accessing app reviews: {str(e)}")
@@ -205,76 +253,84 @@ def fetch_app_reviews():
                 'status': 'error',
                 'message': 'App ID is required'
             }), 400
-            
+
         count = min(int(request.json.get('count', 50)), 200)  # Limit max reviews
         sort = request.json.get('sort', 'most_relevant')
-        
+
         logger.debug(f"Fetching reviews for app: {app_id}, count: {count}, sort: {sort}")
-        
+
         reviews = get_app_reviews(app_id, count=count, sort=sort)
         if not reviews:
             return jsonify({
                 'status': 'error',
                 'message': 'No reviews found or error fetching reviews'
             }), 404
-        
+
         # Save the reviews info into the database
         with app.app_context():
             for review in reviews:
+                # Convert timestamp to datetime for database storage
+                timestamp_ms = review['at']
+                if isinstance(timestamp_ms, (int, float)):
+                    date_obj = datetime.datetime.fromtimestamp(timestamp_ms / 1000)
+                else:
+                    # If it's already a datetime object, use it as is
+                    date_obj = timestamp_ms
+
                 new_review = ScrapedReview(
                     app_id = app_id,
                     review_id = review['reviewId'],
                     user_name = review['userName'],
                     rating = review['score'],
                     text = review['content'],
-                    date = datetime.datetime.fromtimestamp(review['at'] / 1000)
+                    date = date_obj
                 )
                 db.session.add(new_review)
             db.session.commit()
 
-        
+
         # Process reviews with sentiment analysis
         processed_texts, preprocessing_details = preprocess_reviews(reviews)
         sentiment_results = analyze_sentiment(processed_texts)
-        
+
         # Combine reviews with sentiment scores and preprocessing details
         for i, review in enumerate(reviews):
             review['sentiment_score'] = sentiment_results[i].polarity
             review['sentiment_label'] = 'positive' if sentiment_results[i].polarity > 0 else ('negative' if sentiment_results[i].polarity < 0 else 'neutral')
             review['preprocessing'] = preprocessing_details[i]
             review['processed_text'] = processed_texts[i]
-        
+
         # Calculate sentiment metrics
         sentiment_counts = {
             'positive': sum(1 for r in reviews if r['sentiment_label'] == 'positive'),
             'neutral': sum(1 for r in reviews if r['sentiment_label'] == 'neutral'),
             'negative': sum(1 for r in reviews if r['sentiment_label'] == 'negative')
         }
-        
+
         # Calculate preprocessing metrics
         total_token_count = sum(detail['original_token_count'] for detail in preprocessing_details if detail['original_token_count'] > 0)
         processed_token_count = sum(detail['processed_token_count'] for detail in preprocessing_details if detail['processed_token_count'] > 0)
         removed_token_count = total_token_count - processed_token_count
-        
+
         preprocessing_metrics = {
             'total_token_count': total_token_count,
             'processed_token_count': processed_token_count,
             'removed_token_count': removed_token_count,
             'reduction_percentage': int((removed_token_count / total_token_count * 100) if total_token_count > 0 else 0)
         }
-        
-        # Get most common removed stopwords 
+
+        # Get most common removed stopwords
         all_removed_stopwords = []
         for detail in preprocessing_details:
             all_removed_stopwords.extend(detail.get('removed_stopwords', []))
-        
+
         # Count occurrences of each stopword
         from collections import Counter
         stopword_counts = Counter(all_removed_stopwords)
         top_stopwords = [{"word": word, "count": count} for word, count in stopword_counts.most_common(10)]
-        
+
         preprocessing_metrics['top_stopwords'] = top_stopwords
-        
+
         return jsonify({
             'status': 'success',
             'data': reviews,

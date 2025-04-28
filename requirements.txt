@@ -3,4 +3,5 @@ Flask-SQLAlchemy
 google-play-scraper
 pandas
 numpy
-pysastrawi
+sastrawi
+gunicorn
