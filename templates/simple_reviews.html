@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} - Reviews</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #6c757d;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>{{ app_name }} - Reviews</h1>
+        
+        <!-- Loading Spinner -->
+        <div id="loadingContainer" class="text-center my-5">
+            <div class="spinner-border loading-spinner text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Fetching and analyzing reviews...</p>
+        </div>
+        
+        <!-- Reviews Container -->
+        <div id="reviewsContainer" class="d-none">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Reviews</h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary filter-btn" data-filter="all">All</button>
+                        <button class="btn btn-sm btn-outline-success filter-btn" data-filter="positive">Positive</button>
+                        <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="neutral">Neutral</button>
+                        <button class="btn btn-sm btn-outline-danger filter-btn" data-filter="negative">Negative</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="reviewsTable" class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Rating</th>
+                                    <th>Review</th>
+                                    <th>Sentiment</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reviewsTableBody">
+                                <!-- Reviews will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const appId = "{{ app_id }}";
+        
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const filter = this.getAttribute('data-filter');
+                filterReviews(filter);
+            });
+        });
+
+        function fetchReviews(appId, count, sort) {
+            // Show loading spinner
+            document.getElementById('loadingContainer').classList.remove('d-none');
+            document.getElementById('reviewsContainer').classList.add('d-none');
+
+            // Fetch reviews
+            fetch('/fetch_app_reviews', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ app_id: appId, count: parseInt(count), sort: sort }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Display reviews
+                    populateReviewsTable(data.data);
+                    document.getElementById('reviewsContainer').classList.remove('d-none');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while fetching reviews.');
+            })
+            .finally(() => {
+                // Hide loading spinner
+                document.getElementById('loadingContainer').classList.add('d-none');
+            });
+        }
+
+        function populateReviewsTable(reviews) {
+            const tableBody = document.getElementById('reviewsTableBody');
+            tableBody.innerHTML = '';
+
+            reviews.forEach(review => {
+                const row = document.createElement('tr');
+                row.classList.add('review-row');
+                row.setAttribute('data-sentiment', review.sentiment_label);
+
+                // Format date
+                let formattedDate = '';
+                try {
+                    // Check if review.at is a timestamp (number) or a string date
+                    if (typeof review.at === 'number') {
+                        const reviewDate = new Date(review.at);
+                        formattedDate = reviewDate.toLocaleDateString();
+                    } else if (review.at) {
+                        // If it's a string, try to parse it or just use it directly
+                        formattedDate = review.at;
+                    }
+                } catch (e) {
+                    console.error('Error formatting date:', e);
+                    formattedDate = String(review.at || '');
+                }
+
+                // Star rating HTML
+                let starsHtml = '';
+                for (let i = 1; i <= 5; i++) {
+                    if (i <= review.score) {
+                        starsHtml += '<i class="fas fa-star text-warning"></i>';
+                    } else {
+                        starsHtml += '<i class="far fa-star text-warning"></i>';
+                    }
+                }
+
+                // Sentiment badge class
+                let sentimentClass = 'bg-warning';
+                if (review.sentiment_label === 'positive') {
+                    sentimentClass = 'bg-success';
+                } else if (review.sentiment_label === 'negative') {
+                    sentimentClass = 'bg-danger';
+                }
+
+                row.innerHTML = `
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="avatar me-2">
+                                ${review.userName.charAt(0).toUpperCase()}
+                            </div>
+                            <div>${review.userName}</div>
+                        </div>
+                    </td>
+                    <td>${starsHtml}</td>
+                    <td>${review.content}</td>
+                    <td>
+                        <span class="badge ${sentimentClass}">
+                            ${review.sentiment_label.charAt(0).toUpperCase() + review.sentiment_label.slice(1)}
+                            (${review.sentiment_score.toFixed(2)})
+                        </span>
+                    </td>
+                    <td>${formattedDate}</td>
+                `;
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        function filterReviews(filter) {
+            const rows = document.querySelectorAll('.review-row');
+
+            rows.forEach(row => {
+                if (filter === 'all' || row.getAttribute('data-sentiment') === filter) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        // Initial fetch
+        fetchReviews(appId, 100, 'most_relevant');
+    });
+    </script>
+</body>
+</html>

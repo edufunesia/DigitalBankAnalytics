@@ -249,6 +249,7 @@ def fetch_app_reviews():
     try:
         app_id = request.json.get('app_id')
         if not app_id:
+            logger.error("App ID is required but not provided")
             return jsonify({
                 'status': 'error',
                 'message': 'App ID is required'
@@ -259,78 +260,157 @@ def fetch_app_reviews():
 
         logger.debug(f"Fetching reviews for app: {app_id}, count: {count}, sort: {sort}")
 
-        reviews = get_app_reviews(app_id, count=count, sort=sort)
-        if not reviews:
+        # Step 1: Fetch reviews - with detailed error handling
+        try:
+            reviews = get_app_reviews(app_id, count=count, sort=sort)
+            logger.debug(f"Fetched {len(reviews)} reviews")
+
+            if not reviews:
+                logger.warning(f"No reviews found for app: {app_id}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No reviews found or error fetching reviews'
+                }), 404
+
+        except Exception as e:
+            logger.error(f"Error in get_app_reviews: {str(e)}")
             return jsonify({
                 'status': 'error',
-                'message': 'No reviews found or error fetching reviews'
-            }), 404
+                'message': f"Failed to fetch reviews from Google Play: {str(e)}"
+            }), 500
 
-        # Save the reviews info into the database
-        with app.app_context():
-            for review in reviews:
-                # Convert timestamp to datetime for database storage
-                timestamp_ms = review['at']
-                if isinstance(timestamp_ms, (int, float)):
-                    date_obj = datetime.datetime.fromtimestamp(timestamp_ms / 1000)
+        # Step 2: Save reviews to database - with detailed error handling
+        try:
+            with app.app_context():
+                for review in reviews:
+                    # Convert timestamp to datetime for database storage
+                    timestamp_ms = review.get('at')
+                    if timestamp_ms is None:
+                        logger.warning(f"Review missing 'at' timestamp: {review.get('reviewId', 'unknown')}")
+                        date_obj = datetime.datetime.now()  # Use current time as fallback
+                    elif isinstance(timestamp_ms, (int, float)):
+                        try:
+                            date_obj = datetime.datetime.fromtimestamp(timestamp_ms / 1000)
+                        except Exception as date_error:
+                            logger.warning(f"Error converting timestamp {timestamp_ms}: {str(date_error)}")
+                            date_obj = datetime.datetime.now()  # Use current time as fallback
+                    else:
+                        # If it's already a datetime object, use it as is
+                        date_obj = timestamp_ms
+
+                    try:
+                        new_review = ScrapedReview(
+                            app_id = app_id,
+                            review_id = review.get('reviewId', ''),
+                            user_name = review.get('userName', 'Anonymous'),
+                            rating = review.get('score', 0),
+                            text = review.get('content', ''),
+                            date = date_obj
+                        )
+                        db.session.add(new_review)
+                    except Exception as db_error:
+                        logger.error(f"Error adding review to database: {str(db_error)}")
+                        # Continue with next review instead of failing completely
+                        continue
+
+                db.session.commit()
+                logger.debug("Reviews saved to database")
+        except Exception as db_error:
+            logger.error(f"Database error: {str(db_error)}")
+            # Continue processing even if database save fails
+
+        # Step 3: Process reviews with sentiment analysis - with detailed error handling
+        try:
+            processed_texts, preprocessing_details = preprocess_reviews(reviews)
+            logger.debug("Preprocessing completed")
+            sentiment_results = analyze_sentiment(processed_texts)
+            logger.debug("Sentiment analysis completed")
+        except Exception as analysis_error:
+            logger.error(f"Error in text processing or sentiment analysis: {str(analysis_error)}")
+            return jsonify({
+                'status': 'error',
+                'message': f"Error processing reviews: {str(analysis_error)}"
+            }), 500
+
+        # Step 4: Combine reviews with sentiment scores and preprocessing details
+        try:
+            for i, review in enumerate(reviews):
+                if i < len(sentiment_results):
+                    review['sentiment_score'] = sentiment_results[i].polarity
+                    review['sentiment_label'] = 'positive' if sentiment_results[i].polarity > 0 else ('negative' if sentiment_results[i].polarity < 0 else 'neutral')
                 else:
-                    # If it's already a datetime object, use it as is
-                    date_obj = timestamp_ms
+                    # Handle case where sentiment_results is shorter than reviews
+                    review['sentiment_score'] = 0.0
+                    review['sentiment_label'] = 'neutral'
 
-                new_review = ScrapedReview(
-                    app_id = app_id,
-                    review_id = review['reviewId'],
-                    user_name = review['userName'],
-                    rating = review['score'],
-                    text = review['content'],
-                    date = date_obj
-                )
-                db.session.add(new_review)
-            db.session.commit()
+                if i < len(preprocessing_details):
+                    review['preprocessing'] = preprocessing_details[i]
+                    review['processed_text'] = processed_texts[i]
+                else:
+                    # Handle case where preprocessing_details is shorter than reviews
+                    review['preprocessing'] = {
+                        'original': review.get('content', ''),
+                        'processed_token_count': 0,
+                        'original_token_count': 0,
+                        'removed_stopwords': []
+                    }
+                    review['processed_text'] = ''
 
+            logger.debug("Reviews combined with sentiment scores and preprocessing details")
+        except Exception as combine_error:
+            logger.error(f"Error combining reviews with analysis results: {str(combine_error)}")
+            return jsonify({
+                'status': 'error',
+                'message': f"Error combining reviews with analysis results: {str(combine_error)}"
+            }), 500
 
-        # Process reviews with sentiment analysis
-        processed_texts, preprocessing_details = preprocess_reviews(reviews)
-        sentiment_results = analyze_sentiment(processed_texts)
+        # Step 5: Calculate metrics - with detailed error handling
+        try:
+            # Calculate sentiment metrics
+            sentiment_counts = {
+                'positive': sum(1 for r in reviews if r.get('sentiment_label') == 'positive'),
+                'neutral': sum(1 for r in reviews if r.get('sentiment_label') == 'neutral'),
+                'negative': sum(1 for r in reviews if r.get('sentiment_label') == 'negative')
+            }
 
-        # Combine reviews with sentiment scores and preprocessing details
-        for i, review in enumerate(reviews):
-            review['sentiment_score'] = sentiment_results[i].polarity
-            review['sentiment_label'] = 'positive' if sentiment_results[i].polarity > 0 else ('negative' if sentiment_results[i].polarity < 0 else 'neutral')
-            review['preprocessing'] = preprocessing_details[i]
-            review['processed_text'] = processed_texts[i]
+            # Calculate preprocessing metrics
+            total_token_count = sum(detail.get('original_token_count', 0) for detail in preprocessing_details)
+            processed_token_count = sum(detail.get('processed_token_count', 0) for detail in preprocessing_details)
+            removed_token_count = total_token_count - processed_token_count
 
-        # Calculate sentiment metrics
-        sentiment_counts = {
-            'positive': sum(1 for r in reviews if r['sentiment_label'] == 'positive'),
-            'neutral': sum(1 for r in reviews if r['sentiment_label'] == 'neutral'),
-            'negative': sum(1 for r in reviews if r['sentiment_label'] == 'negative')
-        }
+            preprocessing_metrics = {
+                'total_token_count': total_token_count,
+                'processed_token_count': processed_token_count,
+                'removed_token_count': removed_token_count,
+                'reduction_percentage': int((removed_token_count / total_token_count * 100) if total_token_count > 0 else 0)
+            }
 
-        # Calculate preprocessing metrics
-        total_token_count = sum(detail['original_token_count'] for detail in preprocessing_details if detail['original_token_count'] > 0)
-        processed_token_count = sum(detail['processed_token_count'] for detail in preprocessing_details if detail['processed_token_count'] > 0)
-        removed_token_count = total_token_count - processed_token_count
+            # Get most common removed stopwords
+            all_removed_stopwords = []
+            for detail in preprocessing_details:
+                all_removed_stopwords.extend(detail.get('removed_stopwords', []))
 
-        preprocessing_metrics = {
-            'total_token_count': total_token_count,
-            'processed_token_count': processed_token_count,
-            'removed_token_count': removed_token_count,
-            'reduction_percentage': int((removed_token_count / total_token_count * 100) if total_token_count > 0 else 0)
-        }
+            # Count occurrences of each stopword
+            from collections import Counter
+            stopword_counts = Counter(all_removed_stopwords)
+            top_stopwords = [{"word": word, "count": count} for word, count in stopword_counts.most_common(10)]
 
-        # Get most common removed stopwords
-        all_removed_stopwords = []
-        for detail in preprocessing_details:
-            all_removed_stopwords.extend(detail.get('removed_stopwords', []))
+            preprocessing_metrics['top_stopwords'] = top_stopwords
+            logger.debug("Metrics calculated successfully")
+        except Exception as metrics_error:
+            logger.error(f"Error calculating metrics: {str(metrics_error)}")
+            # Use default metrics if calculation fails
+            sentiment_counts = {'positive': 0, 'neutral': 0, 'negative': 0}
+            preprocessing_metrics = {
+                'total_token_count': 0,
+                'processed_token_count': 0,
+                'removed_token_count': 0,
+                'reduction_percentage': 0,
+                'top_stopwords': []
+            }
 
-        # Count occurrences of each stopword
-        from collections import Counter
-        stopword_counts = Counter(all_removed_stopwords)
-        top_stopwords = [{"word": word, "count": count} for word, count in stopword_counts.most_common(10)]
-
-        preprocessing_metrics['top_stopwords'] = top_stopwords
-
+        # Step 6: Return the response
+        logger.debug("Returning successful response")
         return jsonify({
             'status': 'success',
             'data': reviews,
@@ -338,7 +418,7 @@ def fetch_app_reviews():
             'preprocessing_metrics': preprocessing_metrics
         })
     except Exception as e:
-        logger.error(f"Error fetching app reviews: {str(e)}")
+        logger.error(f"Unhandled error fetching app reviews: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': f"Failed to fetch app reviews: {str(e)}"
