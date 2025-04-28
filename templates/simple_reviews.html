@@ -27,7 +27,14 @@
 <body>
     <div class="container mt-4">
         <h1>{{ app_name }} - Reviews</h1>
-        
+
+        <!-- Export Button -->
+        <div class="mb-4">
+            <a href="{{ url_for('export_reviews_csv', app_id=app_id) }}" class="btn btn-success">
+                <i class="fas fa-file-csv"></i> Export to CSV
+            </a>
+        </div>
+
         <!-- Loading Spinner -->
         <div id="loadingContainer" class="text-center my-5">
             <div class="spinner-border loading-spinner text-primary" role="status">
@@ -35,7 +42,7 @@
             </div>
             <p class="mt-3">Fetching and analyzing reviews...</p>
         </div>
-        
+
         <!-- Reviews Container -->
         <div id="reviewsContainer" class="d-none">
             <div class="card mb-4">
@@ -75,7 +82,7 @@
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         const appId = "{{ app_id }}";
-        
+
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(button => {
             button.addEventListener('click', function() {

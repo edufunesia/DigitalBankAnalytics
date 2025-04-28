@@ -1,6 +1,9 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
+import csv
+import io
+import pandas as pd
+from flask import Flask, render_template, request, jsonify, flash, redirect, url_for, send_file, Response
 import datetime
 from scraper import get_app_info, get_app_reviews
 from models import db, ScrapedApp, ScrapedReview
@@ -193,6 +196,177 @@ def fetch_app_reviews():
             'status': 'error',
             'message': f"Failed to fetch app reviews: {str(e)}"
         }), 500
+
+@app.route('/export/<app_id>/reviews/csv')
+def export_reviews_csv(app_id):
+    """Export app reviews to CSV format"""
+    try:
+        # Fetch reviews from database
+        with app.app_context():
+            reviews = ScrapedReview.query.filter_by(app_id=app_id).all()
+
+        if not reviews:
+            # If no reviews in database, fetch them from Google Play
+            count = 100
+            sort = 'most_relevant'
+            reviews_data = get_app_reviews(app_id, count=count, sort=sort)
+
+            # Process reviews for export
+            processed_reviews = []
+            for review in reviews_data:
+                # Convert timestamp to datetime
+                timestamp_ms = review.get('at')
+                if timestamp_ms is not None and isinstance(timestamp_ms, (int, float)):
+                    try:
+                        date_str = datetime.datetime.fromtimestamp(timestamp_ms / 1000).strftime('%Y-%m-%d')
+                    except:
+                        date_str = str(timestamp_ms)
+                else:
+                    date_str = str(timestamp_ms)
+
+                # Add sentiment
+                rating = review.get('score', 0)
+                if rating >= 4:
+                    sentiment = 'positive'
+                elif rating <= 2:
+                    sentiment = 'negative'
+                else:
+                    sentiment = 'neutral'
+
+                processed_reviews.append({
+                    'review_id': review.get('reviewId', ''),
+                    'user_name': review.get('userName', 'Anonymous'),
+                    'rating': review.get('score', 0),
+                    'text': review.get('content', ''),
+                    'date': date_str,
+                    'sentiment': sentiment
+                })
+        else:
+            # Convert database objects to dictionaries
+            processed_reviews = []
+            for review in reviews:
+                processed_reviews.append({
+                    'review_id': review.review_id,
+                    'user_name': review.user_name,
+                    'rating': review.rating,
+                    'text': review.text,
+                    'date': review.date.strftime('%Y-%m-%d') if review.date else '',
+                    'sentiment': 'positive' if review.rating >= 4 else ('negative' if review.rating <= 2 else 'neutral')
+                })
+
+        # Create CSV in memory
+        output = io.StringIO()
+        fieldnames = ['review_id', 'user_name', 'rating', 'text', 'date', 'sentiment']
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for review in processed_reviews:
+            writer.writerow(review)
+
+        # Create response
+        response = Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            content_type='text/csv'
+        )
+        response.headers['Content-Disposition'] = f'attachment; filename={app_id}_reviews.csv'
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting reviews to CSV: {str(e)}")
+        flash(f"Error exporting reviews: {str(e)}", "danger")
+        return redirect(url_for('app_reviews', app_id=app_id))
+
+@app.route('/export/<app_id>/reviews/excel')
+def export_reviews_excel(app_id):
+    """Export app reviews to Excel format"""
+    try:
+        # Fetch reviews from database
+        with app.app_context():
+            reviews = ScrapedReview.query.filter_by(app_id=app_id).all()
+
+        if not reviews:
+            # If no reviews in database, fetch them from Google Play
+            count = 100
+            sort = 'most_relevant'
+            reviews_data = get_app_reviews(app_id, count=count, sort=sort)
+
+            # Process reviews for export
+            processed_reviews = []
+            for review in reviews_data:
+                # Convert timestamp to datetime
+                timestamp_ms = review.get('at')
+                if timestamp_ms is not None and isinstance(timestamp_ms, (int, float)):
+                    try:
+                        date_str = datetime.datetime.fromtimestamp(timestamp_ms / 1000).strftime('%Y-%m-%d')
+                    except:
+                        date_str = str(timestamp_ms)
+                else:
+                    date_str = str(timestamp_ms)
+
+                # Add sentiment
+                rating = review.get('score', 0)
+                if rating >= 4:
+                    sentiment = 'positive'
+                elif rating <= 2:
+                    sentiment = 'negative'
+                else:
+                    sentiment = 'neutral'
+
+                processed_reviews.append({
+                    'review_id': review.get('reviewId', ''),
+                    'user_name': review.get('userName', 'Anonymous'),
+                    'rating': review.get('score', 0),
+                    'text': review.get('content', ''),
+                    'date': date_str,
+                    'sentiment': sentiment
+                })
+        else:
+            # Convert database objects to dictionaries
+            processed_reviews = []
+            for review in reviews:
+                processed_reviews.append({
+                    'review_id': review.review_id,
+                    'user_name': review.user_name,
+                    'rating': review.rating,
+                    'text': review.text,
+                    'date': review.date.strftime('%Y-%m-%d') if review.date else '',
+                    'sentiment': 'positive' if review.rating >= 4 else ('negative' if review.rating <= 2 else 'neutral')
+                })
+
+        # Create Excel file in memory using pandas
+        output = io.BytesIO()
+
+        # Create a DataFrame from the processed reviews
+        df = pd.DataFrame(processed_reviews)
+
+        # Rename columns for better readability
+        df = df.rename(columns={
+            'review_id': 'Review ID',
+            'user_name': 'User Name',
+            'rating': 'Rating',
+            'text': 'Review Text',
+            'date': 'Date',
+            'sentiment': 'Sentiment'
+        })
+
+        # Export to Excel
+        df.to_excel(output, index=False, sheet_name='Reviews')
+
+        # Reset file pointer
+        output.seek(0)
+
+        # Create response
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'{app_id}_reviews.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting reviews to Excel: {str(e)}")
+        flash(f"Error exporting reviews: {str(e)}", "danger")
+        return redirect(url_for('app_reviews', app_id=app_id))
 
 if __name__ == '__main__':
     db.init_app(app)
