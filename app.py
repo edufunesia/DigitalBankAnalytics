@@ -2,7 +2,7 @@ import os
 import logging
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from scraper import get_app_info, get_app_reviews
-from analysis import analyze_sentiment, preprocess_reviews
+from analysis import analyze_sentiment, preprocess_reviews, extract_aspects, generate_aspect_summary
 from models import db, ScrapedApp, ScrapedReview
 import pandas as pd
 import json
@@ -433,6 +433,137 @@ def about():
 def preprocessing():
     """Page to show the preprocessing step by step"""
     return render_template('preprocessing.html')
+
+@app.route('/app/<app_id>/aspect-analysis')
+def app_aspect_analysis(app_id):
+    """View for aspect-based sentiment analysis of app reviews"""
+    try:
+        # Validate app ID
+        if 'play.google.com' in app_id:
+            # Try to extract package ID from URL
+            import re
+            match = re.search(r'id=([^&]+)', app_id)
+            if match:
+                app_id = match.group(1)
+                # Redirect to the clean URL
+                return redirect(url_for('app_aspect_analysis', app_id=app_id))
+
+        # Verify that the app exists by fetching its info
+        app_info_list = get_app_info([app_id])
+
+        if not app_info_list:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+
+        return render_template('app_aspect_analysis.html', app_id=app_id, app_name=app_info_list[0]['title'], app_info=app_info_list[0])
+    except Exception as e:
+        logger.error(f"Error accessing aspect analysis: {str(e)}")
+        flash(f"Error accessing aspect analysis: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+@app.route('/fetch_aspect_analysis', methods=['POST'])
+def fetch_aspect_analysis():
+    """API endpoint to fetch aspect-based sentiment analysis for app reviews"""
+    try:
+        app_id = request.json.get('app_id')
+        if not app_id:
+            logger.error("App ID is required but not provided")
+            return jsonify({
+                'status': 'error',
+                'message': 'App ID is required'
+            }), 400
+
+        count = min(int(request.json.get('count', 100)), 300)  # Limit max reviews to 300
+        sort = request.json.get('sort', 'most_relevant')
+
+        logger.debug(f"Fetching reviews for aspect analysis: {app_id}, count: {count}, sort: {sort}")
+
+        # Step 1: Fetch reviews
+        try:
+            reviews = get_app_reviews(app_id, count=count, sort=sort)
+            logger.debug(f"Fetched {len(reviews)} reviews for aspect analysis")
+
+            if not reviews:
+                logger.warning(f"No reviews found for app: {app_id}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No reviews found or error fetching reviews'
+                }), 404
+
+        except Exception as e:
+            logger.error(f"Error in get_app_reviews for aspect analysis: {str(e)}")
+            return jsonify({
+                'status': 'error',
+                'message': f"Failed to fetch reviews from Google Play: {str(e)}"
+            }), 500
+
+        # Step 2: Process reviews with sentiment analysis
+        try:
+            processed_texts, preprocessing_details = preprocess_reviews(reviews)
+            logger.debug("Preprocessing completed for aspect analysis")
+            sentiment_results = analyze_sentiment(processed_texts)
+            logger.debug("Sentiment analysis completed for aspect analysis")
+        except Exception as analysis_error:
+            logger.error(f"Error in text processing or sentiment analysis for aspect analysis: {str(analysis_error)}")
+            return jsonify({
+                'status': 'error',
+                'message': f"Error processing reviews: {str(analysis_error)}"
+            }), 500
+
+        # Step 3: Combine reviews with sentiment scores
+        try:
+            for i, review in enumerate(reviews):
+                if i < len(sentiment_results):
+                    review['sentiment_score'] = sentiment_results[i].polarity
+                    review['sentiment_label'] = 'positive' if sentiment_results[i].polarity > 0 else ('negative' if sentiment_results[i].polarity < 0 else 'neutral')
+                else:
+                    # Handle case where sentiment_results is shorter than reviews
+                    review['sentiment_score'] = 0.0
+                    review['sentiment_label'] = 'neutral'
+
+            logger.debug("Reviews combined with sentiment scores for aspect analysis")
+        except Exception as combine_error:
+            logger.error(f"Error combining reviews with analysis results for aspect analysis: {str(combine_error)}")
+            return jsonify({
+                'status': 'error',
+                'message': f"Error combining reviews with analysis results: {str(combine_error)}"
+            }), 500
+
+        # Step 4: Perform aspect-based sentiment analysis
+        try:
+            aspect_results = extract_aspects(reviews)
+            logger.debug("Aspect extraction completed")
+            aspect_summary = generate_aspect_summary(aspect_results)
+            logger.debug("Aspect summary generated")
+        except Exception as aspect_error:
+            logger.error(f"Error in aspect-based sentiment analysis: {str(aspect_error)}")
+            return jsonify({
+                'status': 'error',
+                'message': f"Error in aspect-based sentiment analysis: {str(aspect_error)}"
+            }), 500
+
+        # Step 5: Calculate overall sentiment metrics
+        sentiment_counts = {
+            'positive': sum(1 for r in reviews if r.get('sentiment_label') == 'positive'),
+            'neutral': sum(1 for r in reviews if r.get('sentiment_label') == 'neutral'),
+            'negative': sum(1 for r in reviews if r.get('sentiment_label') == 'negative')
+        }
+
+        # Step 6: Return the response
+        logger.debug("Returning successful aspect analysis response")
+        return jsonify({
+            'status': 'success',
+            'data': reviews,
+            'sentiment_metrics': sentiment_counts,
+            'aspect_results': aspect_results,
+            'aspect_summary': aspect_summary
+        })
+    except Exception as e:
+        logger.error(f"Unhandled error in aspect analysis: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f"Failed to perform aspect analysis: {str(e)}"
+        }), 500
 
 if __name__ == '__main__':
     db.init_app(app)
