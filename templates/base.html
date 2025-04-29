@@ -40,15 +40,10 @@
                             <i class="fas fa-home me-1"></i> Home
                         </a>
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if '/aspect-analysis' in request.path %}active{% endif %}" href="#" id="analysisDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/aspect-analysis' in request.path %}active{% endif %}" href="{{ url_for('index') }}">
                             <i class="fas fa-chart-pie me-1"></i> Aspect Analysis
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="analysisDropdown">
-                            {% for app_id in ['com.alloapp.yump', 'com.jago.digitalBanking', 'id.co.bankbkemobile.digitalbank', 'com.btpn.dc', 'com.bcadigital.blu'] %}
-                                <li><a class="dropdown-item" href="{{ url_for('app_aspect_analysis', app_id=app_id) }}">{{ app_id }}</a></li>
-                            {% endfor %}
-                        </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.path == '/preprocessing' %}active{% endif %}" href="{{ url_for('preprocessing') }}">
