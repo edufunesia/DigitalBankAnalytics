@@ -437,3 +437,117 @@ def generate_aspect_summary(aspect_results):
             'aspect_count': 0,
             'aspects_by_sentiment': []
         }
+
+def calculate_tf_idf(reviews, max_features=50, min_df=2):
+    """
+    Calculate TF-IDF scores for review texts
+
+    Args:
+        reviews (list): List of review dictionaries with content
+        max_features (int): Maximum number of features to extract
+        min_df (int): Minimum document frequency for a term to be included
+
+    Returns:
+        dict: Dictionary containing TF-IDF results and calculation details
+    """
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        import numpy as np
+
+        # Extract review texts
+        review_texts = [review.get('content', '') for review in reviews if review.get('content')]
+
+        if not review_texts:
+            logger.warning("No review texts found for TF-IDF analysis")
+            return {
+                'status': 'error',
+                'message': 'No review texts found for analysis'
+            }
+
+        # Preprocess texts
+        processed_texts, preprocessing_details = preprocess_reviews(reviews)
+
+        # Initialize TF-IDF vectorizer
+        tfidf_vectorizer = TfidfVectorizer(
+            max_features=max_features,
+            min_df=min_df,
+            stop_words='english',  # Use English stopwords in addition to our custom ones
+            ngram_range=(1, 1)     # Only use unigrams for simplicity
+        )
+
+        # Calculate TF-IDF
+        tfidf_matrix = tfidf_vectorizer.fit_transform(processed_texts)
+
+        # Get feature names
+        feature_names = tfidf_vectorizer.get_feature_names_out()
+
+        # Calculate document frequencies
+        df = np.bincount(tfidf_matrix.nonzero()[1], minlength=len(feature_names))
+
+        # Calculate IDF values
+        idf = tfidf_vectorizer.idf_
+
+        # Calculate average TF-IDF score for each term
+        tfidf_means = np.asarray(tfidf_matrix.mean(axis=0)).flatten()
+
+        # Create results dictionary with term details
+        term_details = []
+        for i, term in enumerate(feature_names):
+            # Calculate term frequency in each document
+            term_indices = np.where(tfidf_matrix.toarray()[:, i] > 0)[0]
+            term_tfidf_values = tfidf_matrix.toarray()[term_indices, i]
+
+            # Get document examples for this term
+            doc_examples = []
+            for doc_idx in term_indices[:3]:  # Limit to 3 examples
+                doc_examples.append({
+                    'text': review_texts[doc_idx][:100] + '...' if len(review_texts[doc_idx]) > 100 else review_texts[doc_idx],
+                    'tfidf_score': float(tfidf_matrix.toarray()[doc_idx, i]),
+                    'review_id': reviews[doc_idx].get('reviewId', '')
+                })
+
+            # Calculate TF for example calculation
+            example_tf = 1 / len(processed_texts[0].split()) if processed_texts and processed_texts[0] else 0
+
+            term_details.append({
+                'term': term,
+                'avg_tfidf': float(tfidf_means[i]),
+                'document_frequency': int(df[i]),
+                'idf': float(idf[i]),
+                'document_examples': doc_examples,
+                'calculation_example': {
+                    'term': term,
+                    'tf_explanation': f"TF = (Number of times '{term}' appears in document) / (Total number of terms in document)",
+                    'example_tf': example_tf,
+                    'idf_explanation': f"IDF = log(Total number of documents / Number of documents containing '{term}') + 1",
+                    'example_idf': float(idf[i]),
+                    'tfidf_explanation': f"TF-IDF = TF × IDF",
+                    'example_tfidf': example_tf * float(idf[i])
+                }
+            })
+
+        # Sort terms by average TF-IDF score
+        term_details.sort(key=lambda x: x['avg_tfidf'], reverse=True)
+
+        # Calculate corpus statistics
+        corpus_stats = {
+            'num_documents': len(processed_texts),
+            'avg_document_length': np.mean([len(text.split()) for text in processed_texts]) if processed_texts else 0,
+            'vocabulary_size': len(feature_names),
+            'max_idf': float(np.max(idf)) if len(idf) > 0 else 0,
+            'min_idf': float(np.min(idf)) if len(idf) > 0 else 0
+        }
+
+        # Return results
+        return {
+            'status': 'success',
+            'term_details': term_details,
+            'corpus_stats': corpus_stats,
+            'top_terms': [term['term'] for term in term_details[:10]]
+        }
+    except Exception as e:
+        logger.error(f"Error calculating TF-IDF: {str(e)}")
+        return {
+            'status': 'error',
+            'message': f"Error calculating TF-IDF: {str(e)}"
+        }

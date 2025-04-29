@@ -8,6 +8,7 @@ import datetime
 from scraper import get_app_info, get_app_reviews
 from models import db, ScrapedApp, ScrapedReview
 from aspect_analysis import extract_aspects, generate_aspect_summary
+from analysis import calculate_tf_idf
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -344,17 +345,28 @@ def fetch_app_reviews():
 def export_reviews_csv(app_id):
     """Export app reviews to CSV format"""
     try:
-        # Fetch reviews from database
-        with app.app_context():
-            reviews = ScrapedReview.query.filter_by(app_id=app_id).all()
-
-        if not reviews:
-            # If no reviews in database, fetch them from Google Play
+        # Get count from query parameters
+        count = request.args.get('count', None)
+        if count:
+            try:
+                count = int(count)
+                if count not in [100, 200, 300]:
+                    count = 100  # Default to 100 if invalid value
+            except:
+                count = 100  # Default to 100 if conversion fails
+        else:
             # Try to get review count from session
             session = getattr(request, 'session', None)
             count = 100  # Default value
             if session and 'review_count' in session:
                 count = session['review_count']
+
+        # Fetch reviews from database
+        with app.app_context():
+            reviews = ScrapedReview.query.filter_by(app_id=app_id).limit(count).all()
+
+        if not reviews:
+            # If no reviews in database, fetch them from Google Play
             sort = 'most_relevant'
             reviews_data = get_app_reviews(app_id, count=count, sort=sort)
 
@@ -427,17 +439,28 @@ def export_reviews_csv(app_id):
 def export_reviews_excel(app_id):
     """Export app reviews to Excel format"""
     try:
-        # Fetch reviews from database
-        with app.app_context():
-            reviews = ScrapedReview.query.filter_by(app_id=app_id).all()
-
-        if not reviews:
-            # If no reviews in database, fetch them from Google Play
+        # Get count from query parameters
+        count = request.args.get('count', None)
+        if count:
+            try:
+                count = int(count)
+                if count not in [100, 200, 300]:
+                    count = 100  # Default to 100 if invalid value
+            except:
+                count = 100  # Default to 100 if conversion fails
+        else:
             # Try to get review count from session
             session = getattr(request, 'session', None)
             count = 100  # Default value
             if session and 'review_count' in session:
                 count = session['review_count']
+
+        # Fetch reviews from database
+        with app.app_context():
+            reviews = ScrapedReview.query.filter_by(app_id=app_id).limit(count).all()
+
+        if not reviews:
+            # If no reviews in database, fetch them from Google Play
             sort = 'most_relevant'
             reviews_data = get_app_reviews(app_id, count=count, sort=sort)
 
@@ -696,10 +719,299 @@ def about():
     """About page"""
     return render_template('about.html')
 
+@app.route('/app/<app_id>/tfidf')
+def app_tfidf_analysis(app_id):
+    """Page to display TF-IDF analysis for app reviews"""
+    try:
+        # Clean up app_id if it has query parameters
+        if '?' in app_id:
+            app_id = app_id.split('?')[0]
+            # Redirect to the clean URL
+            return redirect(url_for('app_tfidf_analysis', app_id=app_id))
+
+        # Get review count from query parameters or session
+        review_count = request.args.get('count', None)
+        if not review_count:
+            session = getattr(request, 'session', None)
+            if session and 'review_count' in session:
+                review_count = session['review_count']
+            else:
+                review_count = 100  # Default value
+
+        try:
+            review_count = int(review_count)
+            if review_count not in [100, 200, 300]:
+                review_count = 100  # Default to 100 if invalid value
+        except:
+            review_count = 100  # Default to 100 if conversion fails
+
+        # Verify that the app exists by fetching its info
+        app_info_list = get_app_info([app_id])
+
+        if not app_info_list:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+
+        return render_template('app_tfidf_analysis.html',
+                              app_id=app_id,
+                              app_name=app_info_list[0]['title'],
+                              app_info=app_info_list[0],
+                              review_count=review_count)
+    except Exception as e:
+        logger.error(f"Error accessing TF-IDF analysis: {str(e)}")
+        flash(f"Error accessing TF-IDF analysis: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+@app.route('/fetch_tfidf_analysis', methods=['POST'])
+def fetch_tfidf_analysis():
+    """API endpoint to fetch TF-IDF analysis for app reviews"""
+    try:
+        app_id = request.json.get('app_id')
+        if not app_id:
+            logger.error("App ID is required but not provided")
+            return jsonify({
+                'status': 'error',
+                'message': 'App ID is required'
+            }), 400
+
+        count = min(int(request.json.get('count', 100)), 300)  # Limit max reviews to 300
+        max_features = min(int(request.json.get('max_features', 50)), 100)  # Limit max features
+        min_df = max(int(request.json.get('min_df', 2)), 1)  # Ensure min_df is at least 1
+
+        logger.debug(f"Fetching reviews for TF-IDF analysis: {app_id}, count: {count}")
+
+        # Step 1: Fetch reviews from database first
+        with app.app_context():
+            db_reviews = ScrapedReview.query.filter_by(app_id=app_id).limit(count).all()
+
+        if db_reviews and len(db_reviews) >= count:
+            # Use database reviews if available
+            logger.debug(f"Using {len(db_reviews)} reviews from database for TF-IDF analysis")
+
+            # Convert to dictionary format
+            reviews = []
+            for review in db_reviews:
+                reviews.append({
+                    'reviewId': review.review_id,
+                    'userName': review.user_name,
+                    'score': review.rating,
+                    'content': review.text,
+                    'at': review.date.timestamp() * 1000 if review.date else None
+                })
+        else:
+            # Fetch from Google Play if not in database
+            try:
+                reviews = get_app_reviews(app_id, count=count, sort='most_relevant')
+                logger.debug(f"Fetched {len(reviews)} reviews from Google Play for TF-IDF analysis")
+
+                if not reviews:
+                    logger.warning(f"No reviews found for app: {app_id}")
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'No reviews found or error fetching reviews'
+                    }), 404
+
+            except Exception as e:
+                logger.error(f"Error fetching reviews for TF-IDF analysis: {str(e)}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f"Failed to fetch reviews from Google Play: {str(e)}"
+                }), 500
+
+        # Step 2: Calculate TF-IDF
+        tfidf_results = calculate_tf_idf(reviews, max_features=max_features, min_df=min_df)
+
+        if tfidf_results['status'] != 'success':
+            return jsonify(tfidf_results), 500
+
+        # Step 3: Return the response
+        return jsonify({
+            'status': 'success',
+            'data': tfidf_results
+        })
+    except Exception as e:
+        logger.error(f"Unhandled error in TF-IDF analysis: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f"Failed to perform TF-IDF analysis: {str(e)}"
+        }), 500
+
+@app.route('/app/<app_id>/data-analysis')
+def app_data_analysis(app_id):
+    """Page to display data analysis for app reviews"""
+    try:
+        # Clean up app_id if it has query parameters
+        if '?' in app_id:
+            app_id = app_id.split('?')[0]
+            # Redirect to the clean URL
+            return redirect(url_for('app_data_analysis', app_id=app_id))
+
+        # Get review count from query parameters or session
+        review_count = request.args.get('count', None)
+        if not review_count:
+            session = getattr(request, 'session', None)
+            if session and 'review_count' in session:
+                review_count = session['review_count']
+            else:
+                review_count = 100  # Default value
+
+        try:
+            review_count = int(review_count)
+            if review_count not in [100, 200, 300]:
+                review_count = 100  # Default to 100 if invalid value
+        except:
+            review_count = 100  # Default to 100 if conversion fails
+
+        # Verify that the app exists by fetching its info
+        app_info_list = get_app_info([app_id])
+
+        if not app_info_list:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+
+        return render_template('app_data_analysis.html',
+                              app_id=app_id,
+                              app_name=app_info_list[0]['title'],
+                              app_info=app_info_list[0],
+                              review_count=review_count)
+    except Exception as e:
+        logger.error(f"Error accessing data analysis: {str(e)}")
+        flash(f"Error accessing data analysis: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
 @app.route('/comparison')
 def app_comparison():
     """Page for comparing multiple apps"""
     return render_template('app_comparison.html')
+
+@app.route('/fetch_app_reviews_for_data_analysis', methods=['POST'])
+def fetch_app_reviews_for_data_analysis():
+    """API endpoint to fetch app reviews with detailed sentiment analysis for data analysis page"""
+    try:
+        app_id = request.json.get('app_id')
+        if not app_id:
+            logger.error("App ID is required but not provided")
+            return jsonify({
+                'status': 'error',
+                'message': 'App ID is required'
+            }), 400
+
+        count = min(int(request.json.get('count', 100)), 300)  # Limit max reviews to 300
+        sort = request.json.get('sort', 'most_relevant')
+
+        logger.debug(f"Fetching reviews for data analysis - app: {app_id}, count: {count}, sort: {sort}")
+
+        # Fetch reviews from database first
+        with app.app_context():
+            db_reviews = ScrapedReview.query.filter_by(app_id=app_id).limit(count).all()
+
+        if db_reviews and len(db_reviews) >= count:
+            # Use database reviews if available
+            logger.debug(f"Using {len(db_reviews)} reviews from database for data analysis")
+
+            # Convert to dictionary format
+            reviews = []
+            for review in db_reviews:
+                # Add sentiment based on rating
+                rating = review.rating
+                if rating >= 4:
+                    sentiment = 0.8  # Positive
+                    sentiment_label = 'positive'
+                elif rating <= 2:
+                    sentiment = -0.8  # Negative
+                    sentiment_label = 'negative'
+                else:
+                    sentiment = 0.0  # Neutral
+                    sentiment_label = 'neutral'
+
+                reviews.append({
+                    'reviewId': review.review_id,
+                    'userName': review.user_name,
+                    'score': review.rating,
+                    'content': review.text,
+                    'at': review.date.timestamp() * 1000 if review.date else None,
+                    'sentiment_score': sentiment,
+                    'sentiment_label': sentiment_label
+                })
+        else:
+            # Fetch from Google Play if not in database
+            try:
+                reviews = get_app_reviews(app_id, count=count, sort=sort)
+                logger.debug(f"Fetched {len(reviews)} reviews from Google Play for data analysis")
+
+                if not reviews:
+                    logger.warning(f"No reviews found for app: {app_id}")
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'No reviews found or error fetching reviews'
+                    }), 404
+
+                # Add simple sentiment scores
+                for review in reviews:
+                    # Simple sentiment based on rating
+                    rating = review.get('score', 0)
+                    if rating >= 4:
+                        sentiment = 0.8  # Positive
+                    elif rating <= 2:
+                        sentiment = -0.8  # Negative
+                    else:
+                        sentiment = 0.0  # Neutral
+
+                    review['sentiment_score'] = sentiment
+                    review['sentiment_label'] = 'positive' if sentiment > 0 else ('negative' if sentiment < 0 else 'neutral')
+
+            except Exception as e:
+                logger.error(f"Error fetching reviews for data analysis: {str(e)}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f"Failed to fetch reviews from Google Play: {str(e)}"
+                }), 500
+
+        # Calculate sentiment metrics
+        sentiment_counts = {
+            'positive': sum(1 for r in reviews if r.get('sentiment_label') == 'positive'),
+            'neutral': sum(1 for r in reviews if r.get('sentiment_label') == 'neutral'),
+            'negative': sum(1 for r in reviews if r.get('sentiment_label') == 'negative')
+        }
+
+        # Calculate rating distribution
+        rating_distribution = {
+            '5': sum(1 for r in reviews if r.get('score') == 5),
+            '4': sum(1 for r in reviews if r.get('score') == 4),
+            '3': sum(1 for r in reviews if r.get('score') == 3),
+            '2': sum(1 for r in reviews if r.get('score') == 2),
+            '1': sum(1 for r in reviews if r.get('score') == 1)
+        }
+
+        # Calculate average rating
+        total_ratings = sum(r.get('score', 0) for r in reviews)
+        avg_rating = total_ratings / len(reviews) if reviews else 0
+
+        # Calculate review length statistics
+        review_lengths = [len(r.get('content', '').split()) for r in reviews]
+        avg_review_length = sum(review_lengths) / len(review_lengths) if review_lengths else 0
+        max_review_length = max(review_lengths) if review_lengths else 0
+        min_review_length = min(review_lengths) if review_lengths else 0
+
+        # Return the response
+        return jsonify({
+            'status': 'success',
+            'data': reviews,
+            'sentiment_metrics': sentiment_counts,
+            'rating_distribution': rating_distribution,
+            'avg_rating': avg_rating,
+            'review_length_stats': {
+                'avg': avg_review_length,
+                'max': max_review_length,
+                'min': min_review_length
+            }
+        })
+    except Exception as e:
+        logger.error(f"Unhandled error fetching app reviews for data analysis: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f"Failed to fetch app reviews: {str(e)}"
+        }), 500
 
 @app.route('/fetch_app_reviews_for_comparison', methods=['POST'])
 def fetch_app_reviews_for_comparison():
