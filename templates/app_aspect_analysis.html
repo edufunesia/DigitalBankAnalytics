@@ -10,28 +10,28 @@
         border-radius: 10px;
         overflow: hidden;
     }
-    
+
     .aspect-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
     }
-    
+
     .aspect-icon {
         font-size: 2rem;
         margin-bottom: 1rem;
     }
-    
+
     .aspect-header {
         display: flex;
         align-items: center;
         margin-bottom: 1rem;
     }
-    
+
     .aspect-header .aspect-icon {
         margin-right: 1rem;
         margin-bottom: 0;
     }
-    
+
     .aspect-sentiment-indicator {
         width: 12px;
         height: 12px;
@@ -39,7 +39,7 @@
         display: inline-block;
         margin-right: 5px;
     }
-    
+
     .keyword-badge {
         display: inline-block;
         padding: 0.35em 0.65em;
@@ -54,32 +54,32 @@
         margin-bottom: 0.5rem;
         transition: all 0.2s;
     }
-    
+
     .keyword-badge:hover {
         transform: scale(1.1);
     }
-    
+
     .review-card {
         border-left: 4px solid transparent;
         transition: all 0.2s;
     }
-    
+
     .review-card:hover {
         transform: translateX(5px);
     }
-    
+
     .review-card.positive {
         border-left-color: var(--bs-success);
     }
-    
+
     .review-card.neutral {
         border-left-color: var(--bs-warning);
     }
-    
+
     .review-card.negative {
         border-left-color: var(--bs-danger);
     }
-    
+
     .aspect-tag {
         display: inline-block;
         padding: 0.25em 0.5em;
@@ -89,7 +89,7 @@
         margin-right: 0.25rem;
         margin-bottom: 0.25rem;
     }
-    
+
     .loading-overlay {
         position: fixed;
         top: 0;
@@ -102,46 +102,46 @@
         align-items: center;
         z-index: 9999;
     }
-    
+
     .loading-spinner {
         width: 3rem;
         height: 3rem;
     }
-    
+
     .aspect-chart-container {
         position: relative;
         height: 300px;
         margin-bottom: 2rem;
     }
-    
+
     .summary-stat {
         text-align: center;
         padding: 1.5rem;
         border-radius: 10px;
         transition: all 0.2s;
     }
-    
+
     .summary-stat:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     }
-    
+
     .summary-stat .icon {
         font-size: 2rem;
         margin-bottom: 1rem;
     }
-    
+
     .summary-stat .value {
         font-size: 1.5rem;
         font-weight: bold;
         margin-bottom: 0.5rem;
     }
-    
+
     .summary-stat .label {
         font-size: 0.9rem;
         color: var(--bs-secondary);
     }
-    
+
     /* Aspect icons */
     .aspect-ui-icon { color: #6f42c1; }
     .aspect-performance-icon { color: #fd7e14; }
@@ -189,7 +189,7 @@
                 <p class="card-text">
                     Analyze app reviews by different aspects such as UI, performance, security, and more.
                 </p>
-                
+
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="reviewCount" class="form-label">Number of reviews to analyze</label>
@@ -208,7 +208,7 @@
                         </select>
                     </div>
                 </div>
-                
+
                 <button id="analyzeBtn" class="btn btn-primary">
                     <i class="fas fa-chart-pie me-1"></i> Analyze Reviews
                 </button>
@@ -274,7 +274,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Sentiment overview -->
     <div class="row mb-4">
         <div class="col-md-6 mb-4">
@@ -298,7 +298,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Aspect details -->
     <div class="row mb-4">
         <div class="col-12">
@@ -312,14 +312,14 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Reviews with aspects -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
                     <h3 class="card-title">Reviews by Aspect</h3>
-                    
+
                     <div class="mb-3">
                         <label for="aspectFilter" class="form-label">Filter by aspect</label>
                         <select id="aspectFilter" class="form-select">
@@ -335,7 +335,7 @@
                             <option value="updates">Updates</option>
                         </select>
                     </div>
-                    
+
                     <div id="aspectReviewsContainer">
                         <!-- Reviews will be added here dynamically -->
                     </div>
@@ -347,6 +347,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const appId = '{{ app_id }}';
@@ -354,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let aspectSentimentChart = null;
     let aspectData = null;
     let reviewsData = null;
-    
+
     // Aspect icons mapping
     const aspectIcons = {
         'ui': '<i class="fas fa-palette aspect-ui-icon"></i>',
@@ -367,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'reliability': '<i class="fas fa-check-circle aspect-reliability-icon"></i>',
         'updates': '<i class="fas fa-sync aspect-updates-icon"></i>'
     };
-    
+
     // Aspect names mapping
     const aspectNames = {
         'ui': 'UI/Interface',
@@ -380,27 +381,27 @@ document.addEventListener('DOMContentLoaded', function() {
         'reliability': 'Reliability',
         'updates': 'Updates'
     };
-    
+
     // Analyze button click handler
     document.getElementById('analyzeBtn').addEventListener('click', function() {
         const count = document.getElementById('reviewCount').value;
         const sort = document.getElementById('sortOrder').value;
         performAspectAnalysis(appId, count, sort);
     });
-    
+
     // Aspect filter change handler
     document.getElementById('aspectFilter').addEventListener('change', function() {
         filterReviewsByAspect(this.value);
     });
-    
+
     // Perform aspect analysis
     function performAspectAnalysis(appId, count, sort) {
         // Show loading overlay
         document.getElementById('loadingOverlay').classList.remove('d-none');
-        
+
         // Hide results container
         document.getElementById('resultsContainer').classList.add('d-none');
-        
+
         // Fetch aspect analysis data
         fetch('/fetch_aspect_analysis', {
             method: 'POST',
@@ -419,29 +420,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Store data for filtering
                 aspectData = data.aspect_results;
                 reviewsData = data.data;
-                
+
                 // Update summary stats
                 document.getElementById('reviewsAnalyzed').textContent = data.data.length;
-                
+
                 // Format aspect names for display
                 const mostPositiveAspect = data.aspect_summary.most_positive_aspect;
                 const mostNegativeAspect = data.aspect_summary.most_negative_aspect;
                 const mostMentionedAspect = data.aspect_summary.most_mentioned_aspect;
-                
+
                 document.getElementById('mostPositiveAspect').textContent = mostPositiveAspect ? aspectNames[mostPositiveAspect] : '-';
                 document.getElementById('mostNegativeAspect').textContent = mostNegativeAspect ? aspectNames[mostNegativeAspect] : '-';
                 document.getElementById('mostMentionedAspect').textContent = mostMentionedAspect ? aspectNames[mostMentionedAspect] : '-';
-                
+
                 // Create charts
                 createOverallSentimentChart(data.sentiment_metrics);
                 createAspectSentimentChart(data.aspect_results.aspects);
-                
+
                 // Create aspect cards
                 createAspectCards(data.aspect_results.aspects);
-                
+
                 // Create aspect reviews
                 createAspectReviews(data.aspect_results.review_aspects, data.data);
-                
+
                 // Show results container
                 document.getElementById('resultsContainer').classList.remove('d-none');
             } else {
@@ -457,16 +458,16 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loadingOverlay').classList.add('d-none');
         });
     }
-    
+
     // Create overall sentiment chart
     function createOverallSentimentChart(sentimentMetrics) {
         const ctx = document.getElementById('overallSentimentChart').getContext('2d');
-        
+
         // Destroy existing chart if it exists
         if (overallSentimentChart) {
             overallSentimentChart.destroy();
         }
-        
+
         // Create new chart
         overallSentimentChart = new Chart(ctx, {
             type: 'doughnut',
@@ -513,22 +514,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Create aspect sentiment chart
     function createAspectSentimentChart(aspects) {
         const ctx = document.getElementById('aspectSentimentChart').getContext('2d');
-        
+
         // Destroy existing chart if it exists
         if (aspectSentimentChart) {
             aspectSentimentChart.destroy();
         }
-        
+
         // Prepare data
         const labels = [];
         const positiveData = [];
         const neutralData = [];
         const negativeData = [];
-        
+
         // Only include aspects with mentions
         for (const [aspect, data] of Object.entries(aspects)) {
             if (data.total > 0) {
@@ -538,7 +539,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 negativeData.push(data.negative);
             }
         }
-        
+
         // Create new chart
         aspectSentimentChart = new Chart(ctx, {
             type: 'bar',
@@ -588,12 +589,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Create aspect cards
     function createAspectCards(aspects) {
         const container = document.getElementById('aspectCardsContainer');
         container.innerHTML = '';
-        
+
         // Only include aspects with mentions
         for (const [aspect, data] of Object.entries(aspects)) {
             if (data.total > 0) {
@@ -601,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const positivePercent = Math.round((data.positive / data.total) * 100);
                 const neutralPercent = Math.round((data.neutral / data.total) * 100);
                 const negativePercent = Math.round((data.negative / data.total) * 100);
-                
+
                 // Create sentiment color based on average sentiment
                 let sentimentColor = 'var(--bs-warning)'; // Default neutral
                 if (data.avg_sentiment > 0.1) {
@@ -609,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (data.avg_sentiment < -0.1) {
                     sentimentColor = 'var(--bs-danger)'; // Negative
                 }
-                
+
                 // Create keywords HTML
                 let keywordsHtml = '';
                 if (data.keywords && data.keywords.length > 0) {
@@ -617,7 +618,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         keywordsHtml += `<span class="keyword-badge bg-light text-dark">${keyword.keyword} (${keyword.count})</span>`;
                     });
                 }
-                
+
                 // Create card HTML
                 const cardHtml = `
                     <div class="col-md-4 mb-4">
@@ -629,27 +630,27 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </div>
                                     <h4 class="card-title mb-0">${aspectNames[aspect]}</h4>
                                 </div>
-                                
+
                                 <div class="d-flex align-items-center mb-3">
                                     <div class="aspect-sentiment-indicator" style="background-color: ${sentimentColor};"></div>
                                     <div>Sentiment: ${data.avg_sentiment.toFixed(2)}</div>
                                 </div>
-                                
+
                                 <div class="progress mb-3" style="height: 20px;">
-                                    <div class="progress-bar bg-success" role="progressbar" style="width: ${positivePercent}%" 
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: ${positivePercent}%"
                                         aria-valuenow="${positivePercent}" aria-valuemin="0" aria-valuemax="100">
                                         ${positivePercent}%
                                     </div>
-                                    <div class="progress-bar bg-warning" role="progressbar" style="width: ${neutralPercent}%" 
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: ${neutralPercent}%"
                                         aria-valuenow="${neutralPercent}" aria-valuemin="0" aria-valuemax="100">
                                         ${neutralPercent}%
                                     </div>
-                                    <div class="progress-bar bg-danger" role="progressbar" style="width: ${negativePercent}%" 
+                                    <div class="progress-bar bg-danger" role="progressbar" style="width: ${negativePercent}%"
                                         aria-valuenow="${negativePercent}" aria-valuemin="0" aria-valuemax="100">
                                         ${negativePercent}%
                                     </div>
                                 </div>
-                                
+
                                 <div class="d-flex justify-content-between mb-3">
                                     <div class="text-success">
                                         <i class="fas fa-thumbs-up"></i> ${data.positive}
@@ -661,7 +662,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <i class="fas fa-thumbs-down"></i> ${data.negative}
                                     </div>
                                 </div>
-                                
+
                                 <div class="mt-3">
                                     <h6>Common Keywords:</h6>
                                     <div>${keywordsHtml || 'No keywords found'}</div>
@@ -670,41 +671,41 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
                 `;
-                
+
                 container.innerHTML += cardHtml;
             }
         }
-        
+
         // If no aspects were found
         if (container.innerHTML === '') {
             container.innerHTML = '<div class="col-12"><div class="alert alert-info">No aspects were found in the reviews.</div></div>';
         }
     }
-    
+
     // Create aspect reviews
     function createAspectReviews(reviewAspects, allReviews) {
         const container = document.getElementById('aspectReviewsContainer');
         container.innerHTML = '';
-        
+
         // Create a map of reviews by ID for quick lookup
         const reviewsMap = {};
         allReviews.forEach(review => {
             reviewsMap[review.reviewId] = review;
         });
-        
+
         // Only show reviews with aspects
         if (reviewAspects.length === 0) {
             container.innerHTML = '<div class="alert alert-info">No reviews with identified aspects were found.</div>';
             return;
         }
-        
+
         // Create reviews HTML
         reviewAspects.forEach(item => {
             const reviewId = item.review_id;
             const review = reviewsMap[reviewId];
-            
+
             if (!review) return; // Skip if review not found
-            
+
             // Create aspect tags HTML
             let aspectTagsHtml = '';
             item.aspects.forEach(aspect => {
@@ -714,17 +715,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (aspect.sentiment === 'negative') {
                     tagColor = 'bg-danger text-white';
                 }
-                
+
                 aspectTagsHtml += `<span class="aspect-tag ${tagColor}" data-aspect="${aspect.aspect}">${aspectNames[aspect.aspect]}</span>`;
             });
-            
+
             // Format date
             const date = new Date(review.at);
             const formattedDate = date.toLocaleDateString();
-            
+
             // Create stars HTML
             const starsHtml = createStarsHtml(review.score);
-            
+
             // Create review card HTML
             const cardHtml = `
                 <div class="card review-card mb-3 ${review.sentiment_label}" data-aspects="${item.aspects.map(a => a.aspect).join(',')}" data-review-id="${reviewId}">
@@ -743,18 +744,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             `;
-            
+
             container.innerHTML += cardHtml;
         });
     }
-    
+
     // Filter reviews by aspect
     function filterReviewsByAspect(aspect) {
         const reviewCards = document.querySelectorAll('.review-card');
-        
+
         reviewCards.forEach(card => {
             const cardAspects = card.getAttribute('data-aspects').split(',');
-            
+
             if (aspect === 'all' || cardAspects.includes(aspect)) {
                 card.style.display = 'block';
             } else {
@@ -762,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Create stars HTML
     function createStarsHtml(rating) {
         let html = '';
@@ -775,7 +776,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return html;
     }
-    
+
     // Trigger analysis on page load
     document.getElementById('analyzeBtn').click();
 });

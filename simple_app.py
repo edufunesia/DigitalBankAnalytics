@@ -19,29 +19,10 @@ app.config['SECRET_KEY'] = 'test_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app_data.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-@app.template_filter('date')
-def format_date(value):
-    """Format datetime to readable date"""
-    if isinstance(value, (int, float)):
-        try:
-            # Convert timestamp to datetime (milliseconds)
-            dt = datetime.datetime.fromtimestamp(value / 1000)
-        except Exception:
-            try:
-                # Try as seconds if milliseconds fails
-                dt = datetime.datetime.fromtimestamp(value)
-            except Exception:
-                # If all conversions fail, return the original value
-                return str(value)
-    else:
-        dt = value
-
-    # Format the datetime object
-    try:
-        return dt.strftime('%B %d, %Y') if dt else ""
-    except Exception:
-        # If formatting fails, return the string representation
-        return str(dt) if dt else ""
+@app.template_filter('format_number')
+def format_number(value):
+    """Format large numbers with commas as thousands separators"""
+    return "{:,}".format(value) if value else 0
 
 @app.route('/')
 def index():
@@ -79,6 +60,41 @@ def index():
         recent_apps_list = []
 
     return render_template('simple_index.html', recent_apps=recent_apps_list)
+
+@app.route('/app/<app_id>')
+def app_details(app_id):
+    """View for detailed information about a specific app"""
+    try:
+        # Validate app ID
+        if 'play.google.com' in app_id:
+            # Try to extract package ID from URL
+            import re
+            match = re.search(r'id=([^&]+)', app_id)
+            if match:
+                app_id = match.group(1)
+            else:
+                flash("Invalid app URL. Please provide a valid Google Play Store app URL or package ID.", "danger")
+                return redirect(url_for('index'))
+
+        app_info_list = get_app_info([app_id])
+
+        if not app_info_list:
+            flash(f"No information found for app: {app_id}", "danger")
+            return redirect(url_for('index'))
+
+        app_info = app_info_list[0]
+        return render_template('app_details.html', app=app_info)
+    except IndexError:
+        flash(f"No information found for app: {app_id}", "danger")
+        return redirect(url_for('index'))
+    except Exception as e:
+        logger.error(f"Error retrieving app details: {str(e)}")
+        flash(f"Error retrieving app details: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+
+
+
 
 @app.route('/search', methods=['POST'])
 def search_app():
@@ -503,6 +519,7 @@ def export_reviews_excel(app_id):
         flash(f"Error exporting reviews: {str(e)}", "danger")
         return redirect(url_for('app_reviews', app_id=app_id))
 
+
 @app.route('/app/<app_id>/aspect-analysis')
 def app_aspect_analysis(app_id):
     """Page to display aspect-based sentiment analysis for app reviews"""
@@ -574,7 +591,7 @@ def fetch_aspect_analysis():
 
         if db_reviews and len(db_reviews) >= count:
             # Use database reviews if available
-            logger.debug(f"Using {len(db_reviews)} reviews from database for comparison")
+            logger.debug(f"Using {len(db_reviews)} reviews from database for aspect analysis")
 
             # Convert to dictionary format
             reviews = []
@@ -604,7 +621,7 @@ def fetch_aspect_analysis():
             # Fetch from Google Play if not in database
             try:
                 reviews = get_app_reviews(app_id, count=count, sort=sort)
-                logger.debug(f"Fetched {len(reviews)} reviews from Google Play for comparison")
+                logger.debug(f"Fetched {len(reviews)} reviews from Google Play for aspect analysis")
 
                 if not reviews:
                     logger.warning(f"No reviews found for app: {app_id}")
@@ -668,6 +685,16 @@ def fetch_aspect_analysis():
             'status': 'error',
             'message': f"Failed to perform aspect analysis: {str(e)}"
         }), 500
+
+@app.route('/preprocessing')
+def preprocessing():
+    """Page to show the preprocessing step by step"""
+    return render_template('preprocessing.html')
+
+@app.route('/about')
+def about():
+    """About page"""
+    return render_template('about.html')
 
 @app.route('/comparison')
 def app_comparison():
