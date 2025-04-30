@@ -16,15 +16,41 @@ def get_app_info(app_packages):
 
     Returns:
         list: List of dictionaries containing app information
+
+    Raises:
+        Exception: If no valid app information could be retrieved
     """
     app_info_list = []
+    failed_packages = []
 
     for package in app_packages:
         try:
-            result = app(package, lang='id', country='id')
-            app_info_list.append(result)
+            # First try with Indonesian locale
+            try:
+                result = app(package, lang='id', country='id')
+                app_info_list.append(result)
+                logger.info(f"Successfully fetched info for app {package}")
+            except Exception as e_id:
+                # If Indonesian locale fails, try with English/US locale
+                logger.warning(f"Failed to fetch app {package} with ID locale: {str(e_id)}")
+                try:
+                    result = app(package, lang='en', country='us')
+                    app_info_list.append(result)
+                    logger.info(f"Successfully fetched info for app {package} with EN locale")
+                except Exception as e_en:
+                    # Both locales failed
+                    logger.error(f"Failed to fetch app {package} with both locales: {str(e_en)}")
+                    failed_packages.append(package)
+                    raise Exception(f"Could not fetch app info for {package}: {str(e_en)}")
         except Exception as e:
             logger.error(f"Error fetching info for app {package}: {str(e)}")
+            failed_packages.append(package)
+
+    # If we couldn't fetch any app info, raise an exception
+    if not app_info_list and failed_packages:
+        error_msg = f"Could not fetch information for any of the provided app IDs: {', '.join(failed_packages)}"
+        logger.error(error_msg)
+        raise Exception(error_msg)
 
     return app_info_list
 

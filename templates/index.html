@@ -11,12 +11,12 @@
                 <p class="card-text">
                     Analyze Google Play Store data for banking apps, including ratings, reviews, and sentiment analysis.
                 </p>
-                
+
                 <!-- Add custom app section -->
                 <div class="mb-3">
                     <div class="input-group">
-                        <input type="text" id="customAppUrl" class="form-control" 
-                            placeholder="Enter Play Store app URL or package ID (e.g., com.instagram.android)" 
+                        <input type="text" id="customAppUrl" class="form-control"
+                            placeholder="Enter Play Store app URL or package ID (e.g., com.instagram.android)"
                             aria-label="Add custom app">
                         <button id="addCustomAppBtn" class="btn btn-success">
                             <i class="fas fa-plus me-1"></i> Add App
@@ -24,7 +24,7 @@
                     </div>
                     <div class="form-text">Example: https://play.google.com/store/apps/details?id=com.instagram.android</div>
                 </div>
-                
+
                 <button id="fetchDataBtn" class="btn btn-primary">
                     <i class="fas fa-download me-1"></i> Fetch App Data
                 </button>
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get app packages from the hidden list
     const appPackagesList = document.querySelectorAll('#appPackages li');
     let appPackages = Array.from(appPackagesList).map(li => li.textContent.trim());
-    
+
     // Attach event listeners to all remove app buttons
     document.querySelectorAll('.remove-app-btn').forEach(button => {
         button.addEventListener('click', function() {
@@ -188,13 +188,13 @@ document.addEventListener('DOMContentLoaded', function() {
             removeApp(appId, row);
         });
     });
-    
+
     // Fetch data button event listener
     const fetchDataBtn = document.getElementById('fetchDataBtn');
     fetchDataBtn.addEventListener('click', function() {
         fetchAppData(appPackages);
     });
-    
+
     // Function to remove an app from the list
     function removeApp(appId, row) {
         // Remove from array
@@ -202,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (index > -1) {
             appPackages.splice(index, 1);
         }
-        
+
         // Remove from hidden list
         const hiddenItems = document.querySelectorAll('#appPackages li');
         hiddenItems.forEach(item => {
@@ -210,10 +210,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 item.remove();
             }
         });
-        
+
         // Remove from visible table
         row.remove();
-        
+
         // Show notification
         const notification = document.createElement('div');
         notification.className = 'alert alert-info alert-dismissible fade show mt-2';
@@ -221,66 +221,83 @@ document.addEventListener('DOMContentLoaded', function() {
             <strong>Removed!</strong> App "${appId}" has been removed from the list.
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
-        
+
         document.getElementById('customAppsContainer').querySelector('.card-body').appendChild(notification);
-        
+
         // Auto-dismiss after 3 seconds
         setTimeout(() => {
             notification.remove();
         }, 3000);
     }
-    
+
     // Add custom app button event listener
     const addCustomAppBtn = document.getElementById('addCustomAppBtn');
     const customAppUrlInput = document.getElementById('customAppUrl');
-    
+
     addCustomAppBtn.addEventListener('click', function() {
         addCustomApp();
     });
-    
+
     customAppUrlInput.addEventListener('keypress', function(event) {
         if (event.key === 'Enter') {
             addCustomApp();
         }
     });
-    
+
     function addCustomApp() {
         const appUrl = customAppUrlInput.value.trim();
         if (!appUrl) {
-            alert('Please enter a valid Play Store app URL or package ID.');
+            showToast('Error', 'Please enter a valid Play Store app URL or package ID.', 'error');
             return;
         }
-        
+
         let appId = appUrl;
-        
+
         // If it's a URL, extract the package ID
         if (appUrl.includes('play.google.com')) {
-            const urlParams = new URLSearchParams(appUrl.split('?')[1]);
-            const extractedId = urlParams.get('id');
-            
-            if (extractedId) {
-                appId = extractedId;
-            } else {
-                alert('Unable to extract package ID from URL. Please enter a valid Play Store URL.');
+            try {
+                const urlParts = appUrl.split('?');
+                if (urlParts.length < 2) {
+                    showToast('Error', 'Invalid Play Store URL format. Please check the URL.', 'error');
+                    return;
+                }
+
+                const urlParams = new URLSearchParams(urlParts[1]);
+                const extractedId = urlParams.get('id');
+
+                if (extractedId) {
+                    appId = extractedId;
+                } else {
+                    showToast('Error', 'Unable to extract package ID from URL. Please enter a valid Play Store URL.', 'error');
+                    return;
+                }
+            } catch (error) {
+                showToast('Error', 'Failed to parse URL. Please enter a valid Play Store URL.', 'error');
                 return;
             }
         }
-        
-        // Check if app is already in the list
-        if (appPackages.includes(appId)) {
-            alert('This app is already in the list.');
+
+        // Basic validation for package ID format
+        if (!validateAppId(appId)) {
+            showToast('Error', 'Invalid package ID format. Package IDs typically look like "com.example.app".', 'error');
             return;
         }
-        
+
+        // Check if app is already in the list
+        if (appPackages.includes(appId)) {
+            showToast('Warning', 'This app is already in the list.', 'warning');
+            return;
+        }
+
         // Add app to the list
         appPackages.push(appId);
-        
+
         // Add to hidden list
         const listContainer = document.getElementById('appPackages');
         const newItem = document.createElement('li');
         newItem.textContent = appId;
         listContainer.appendChild(newItem);
-        
+
         // Add to visible table
         const tableBody = document.getElementById('appListTableBody');
         const row = document.createElement('tr');
@@ -293,41 +310,52 @@ document.addEventListener('DOMContentLoaded', function() {
             </td>
         `;
         tableBody.appendChild(row);
-        
+
         // Add event listener to the new remove button
         row.querySelector('.remove-app-btn').addEventListener('click', function() {
             removeApp(appId, row);
         });
-        
-        // Show success message
-        const successAlert = document.createElement('div');
-        successAlert.className = 'alert alert-success alert-dismissible fade show mt-2';
-        successAlert.innerHTML = `
-            <strong>Success!</strong> Added app "${appId}" to the list.
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        `;
-        
-        const inputGroup = customAppUrlInput.parentElement.parentElement;
-        inputGroup.appendChild(successAlert);
-        
-        // Auto-dismiss after 3 seconds
-        setTimeout(() => {
-            successAlert.remove();
-        }, 3000);
-        
+
+        // Show success message using toast
+        showToast('Success', `Added app "${appId}" to the list.`, 'success');
+
         // Clear input
         customAppUrlInput.value = '';
     }
-    
+
+    // Validate app ID format
+    function validateAppId(appId) {
+        // Most valid package IDs have at least one dot and no spaces
+        // This is a basic validation, not comprehensive
+        if (!appId || appId.trim() === '') {
+            return false;
+        }
+
+        // Check for invalid characters (spaces, special chars except dots)
+        if (/[^\w.]/.test(appId)) {
+            return false;
+        }
+
+        // Most valid package IDs have at least one dot
+        // But we'll allow custom formats too for flexibility
+        return true;
+    }
+
     function fetchAppData(packages) {
+        // Check if packages array is empty
+        if (!packages || packages.length === 0) {
+            showToast('Error', 'No apps to analyze. Please add at least one app.', 'error');
+            return;
+        }
+
         // Show loading spinner
         document.getElementById('loadingContainer').classList.remove('d-none');
-        
+
         // Hide other containers
         document.getElementById('overviewContainer').classList.add('d-none');
         document.getElementById('chartsContainer').classList.add('d-none');
         document.getElementById('appDataContainer').classList.add('d-none');
-        
+
         // Fetch app data
         fetch('/fetch_app_info', {
             method: 'POST',
@@ -336,50 +364,77 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({ app_packages: packages }),
         })
-        .then(response => response.json())
+        .then(response => {
+            // Check if response is ok (status in the range 200-299)
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.status === 'success') {
                 // Update overview metrics
                 document.getElementById('appCount').textContent = data.metrics.app_count;
                 document.getElementById('avgRating').textContent = data.metrics.avg_rating;
                 document.getElementById('avgReviews').textContent = data.metrics.avg_reviews.toLocaleString();
-                
+
                 // Display app data
                 populateAppTable(data.data);
-                
+
                 // Create charts
                 createRatingsChart('ratingsChart', data.data);
                 createDownloadsChart('downloadsChart', data.data);
-                
+
                 // Show containers
                 document.getElementById('overviewContainer').classList.remove('d-none');
                 document.getElementById('chartsContainer').classList.remove('d-none');
                 document.getElementById('appDataContainer').classList.remove('d-none');
+
+                // Show success message
+                showToast('Success', 'App data fetched successfully!', 'success');
+
+                // Show warnings if any
+                if (data.warnings) {
+                    showToast('Warning', data.warnings.message, 'warning');
+                }
             } else {
-                alert('Error: ' + data.message);
+                showToast('Error', data.message || 'Unknown error occurred', 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('An error occurred while fetching data.');
+            showToast('Error', error.message || 'An error occurred while fetching data.', 'error');
         })
         .finally(() => {
             // Hide loading spinner
             document.getElementById('loadingContainer').classList.add('d-none');
         });
     }
-    
+
+    // Toast notification function
+    function showToast(title, message, type = 'info') {
+        // Use the global showToast function if available
+        if (window.showToast) {
+            window.showToast(title, message, type);
+        } else {
+            // Fallback to alert if showToast is not available
+            alert(`${title}: ${message}`);
+        }
+    }
+
     function populateAppTable(appData) {
         const tableBody = document.getElementById('appTableBody');
         tableBody.innerHTML = '';
-        
+
         appData.forEach(app => {
             const row = document.createElement('tr');
-            
+
             // Format date
             const updatedDate = new Date(app.updated);
             const formattedDate = updatedDate.toLocaleDateString();
-            
+
             row.innerHTML = `
                 <td>
                     <div class="d-flex align-items-center">
@@ -409,15 +464,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     </a>
                 </td>
             `;
-            
+
             tableBody.appendChild(row);
         });
-        
+
         // Initialize DataTable
         if ($.fn.DataTable.isDataTable('#appDataTable')) {
             $('#appDataTable').DataTable().destroy();
         }
-        
+
         $('#appDataTable').DataTable({
             responsive: true,
             pageLength: 10,

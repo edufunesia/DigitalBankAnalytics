@@ -464,22 +464,67 @@ def calculate_tf_idf(reviews, max_features=50, min_df=2):
                 'message': 'No review texts found for analysis'
             }
 
+        logger.info(f"Starting TF-IDF analysis on {len(review_texts)} reviews")
+
         # Preprocess texts
         processed_texts, preprocessing_details = preprocess_reviews(reviews)
 
-        # Initialize TF-IDF vectorizer
+        # Filter out empty processed texts
+        valid_indices = []
+        valid_processed_texts = []
+        valid_original_texts = []
+
+        for i, text in enumerate(processed_texts):
+            if text and len(text.strip()) > 0:
+                valid_indices.append(i)
+                valid_processed_texts.append(text)
+                valid_original_texts.append(review_texts[i] if i < len(review_texts) else "")
+
+        if not valid_processed_texts:
+            logger.warning("No valid processed texts after preprocessing")
+            return {
+                'status': 'error',
+                'message': 'All texts were empty after preprocessing'
+            }
+
+        logger.info(f"After preprocessing: {len(valid_processed_texts)} valid texts out of {len(processed_texts)} total")
+
+        # Log some preprocessing statistics
+        total_original_tokens = sum(detail.get('original_token_count', 0) for detail in preprocessing_details)
+        total_processed_tokens = sum(detail.get('processed_token_count', 0) for detail in preprocessing_details)
+        logger.info(f"Preprocessing reduced token count from {total_original_tokens} to {total_processed_tokens} ({total_processed_tokens/total_original_tokens*100:.1f}%)")
+
+        # Initialize TF-IDF vectorizer with appropriate parameters
         tfidf_vectorizer = TfidfVectorizer(
             max_features=max_features,
             min_df=min_df,
-            stop_words='english',  # Use English stopwords in addition to our custom ones
-            ngram_range=(1, 1)     # Only use unigrams for simplicity
+            stop_words=None,  # We've already removed stopwords in preprocessing
+            ngram_range=(1, 1),  # Only use unigrams for simplicity
+            token_pattern=r"(?u)\b\w+\b",  # Simple token pattern to match our preprocessed text
+            lowercase=False  # Text is already lowercased in preprocessing
         )
 
         # Calculate TF-IDF
-        tfidf_matrix = tfidf_vectorizer.fit_transform(processed_texts)
+        try:
+            tfidf_matrix = tfidf_vectorizer.fit_transform(valid_processed_texts)
+            logger.info(f"TF-IDF matrix shape: {tfidf_matrix.shape}")
+        except Exception as e:
+            logger.error(f"Error in TF-IDF vectorization: {str(e)}")
+            return {
+                'status': 'error',
+                'message': f"Error in TF-IDF calculation: {str(e)}"
+            }
 
         # Get feature names
         feature_names = tfidf_vectorizer.get_feature_names_out()
+        logger.info(f"Extracted {len(feature_names)} features")
+
+        if len(feature_names) == 0:
+            logger.warning("No features extracted by TF-IDF vectorizer")
+            return {
+                'status': 'error',
+                'message': 'No features could be extracted from the processed texts'
+            }
 
         # Calculate document frequencies
         df = np.bincount(tfidf_matrix.nonzero()[1], minlength=len(feature_names))
@@ -500,14 +545,21 @@ def calculate_tf_idf(reviews, max_features=50, min_df=2):
             # Get document examples for this term
             doc_examples = []
             for doc_idx in term_indices[:3]:  # Limit to 3 examples
-                doc_examples.append({
-                    'text': review_texts[doc_idx][:100] + '...' if len(review_texts[doc_idx]) > 100 else review_texts[doc_idx],
-                    'tfidf_score': float(tfidf_matrix.toarray()[doc_idx, i]),
-                    'review_id': reviews[doc_idx].get('reviewId', '')
-                })
+                if doc_idx < len(valid_indices):
+                    original_idx = valid_indices[doc_idx]
+                    if original_idx < len(reviews):
+                        doc_examples.append({
+                            'text': valid_original_texts[doc_idx][:100] + '...' if len(valid_original_texts[doc_idx]) > 100 else valid_original_texts[doc_idx],
+                            'processed_text': valid_processed_texts[doc_idx][:100] + '...' if len(valid_processed_texts[doc_idx]) > 100 else valid_processed_texts[doc_idx],
+                            'tfidf_score': float(tfidf_matrix.toarray()[doc_idx, i]),
+                            'review_id': reviews[original_idx].get('reviewId', '') if original_idx < len(reviews) else ''
+                        })
 
             # Calculate TF for example calculation
-            example_tf = 1 / len(processed_texts[0].split()) if processed_texts and processed_texts[0] else 0
+            example_text = valid_processed_texts[0] if valid_processed_texts else ""
+            example_tokens = example_text.split()
+            example_term_count = example_text.split().count(term) if example_tokens else 0
+            example_tf = example_term_count / len(example_tokens) if example_tokens else 0
 
             term_details.append({
                 'term': term,
@@ -528,15 +580,23 @@ def calculate_tf_idf(reviews, max_features=50, min_df=2):
 
         # Sort terms by average TF-IDF score
         term_details.sort(key=lambda x: x['avg_tfidf'], reverse=True)
+        logger.info(f"Generated details for {len(term_details)} terms")
 
         # Calculate corpus statistics
         corpus_stats = {
-            'num_documents': len(processed_texts),
-            'avg_document_length': np.mean([len(text.split()) for text in processed_texts]) if processed_texts else 0,
+            'num_documents': len(valid_processed_texts),
+            'avg_document_length': np.mean([len(text.split()) for text in valid_processed_texts]) if valid_processed_texts else 0,
             'vocabulary_size': len(feature_names),
             'max_idf': float(np.max(idf)) if len(idf) > 0 else 0,
-            'min_idf': float(np.min(idf)) if len(idf) > 0 else 0
+            'min_idf': float(np.min(idf)) if len(idf) > 0 else 0,
+            'preprocessing_stats': {
+                'original_tokens': total_original_tokens,
+                'processed_tokens': total_processed_tokens,
+                'reduction_percentage': round((1 - total_processed_tokens/total_original_tokens) * 100, 1) if total_original_tokens > 0 else 0
+            }
         }
+
+        logger.info("TF-IDF analysis completed successfully")
 
         # Return results
         return {
