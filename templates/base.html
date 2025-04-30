@@ -60,6 +60,16 @@
                             <li><a class="dropdown-item" href="{{ url_for('app_data_analysis', app_id='com.facebook.katana') }}">Facebook</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {% if '/tfidf' in request.path %}active{% endif %}" href="#" id="tfidfDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-search me-1"></i> TF-IDF Analysis
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="tfidfDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('app_tfidf_analysis', app_id='com.instagram.android') }}">Instagram</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('app_tfidf_analysis', app_id='com.whatsapp') }}">WhatsApp</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('app_tfidf_analysis', app_id='com.facebook.katana') }}">Facebook</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.path == '/preprocessing' %}active{% endif %}" href="{{ url_for('preprocessing') }}">
                             <i class="fas fa-cogs me-1"></i> Preprocessing
