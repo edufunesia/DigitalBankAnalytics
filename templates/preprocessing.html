@@ -1,0 +1,576 @@
+{% extends 'base.html' %}
+
+{% block title %}Text Preprocessing Steps{% endblock %}
+
+{% block extra_head %}
+<style>
+    .preprocessing-card {
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .preprocessing-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .step-number {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        text-align: center;
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        margin-right: 10px;
+        font-weight: bold;
+    }
+
+    .step-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #0d6efd;
+    }
+
+    .example-box {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 15px;
+    }
+
+    .example-box pre {
+        margin-bottom: 0;
+        white-space: pre-wrap;
+    }
+
+    .highlight {
+        background-color: #e6f7ff;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+
+    .removed {
+        text-decoration: line-through;
+        color: #dc3545;
+    }
+
+    .added {
+        color: #28a745;
+        font-weight: bold;
+    }
+
+    .timeline {
+        position: relative;
+        padding: 1rem;
+        margin: 0 auto;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        height: 100%;
+        border: 1px solid var(--bs-border-color);
+        left: 40px;
+        top: 0;
+    }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 2rem;
+        padding-left: 70px;
+    }
+
+    .timeline-marker {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        left: 25px;
+        top: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+    }
+
+    .timeline-content {
+        padding: 0 1rem;
+    }
+
+    .demo-container {
+        margin-top: 30px;
+        margin-bottom: 30px;
+    }
+
+    .token {
+        display: inline-block;
+        margin: 2px;
+        padding: 5px 10px;
+        background-color: #e9ecef;
+        border-radius: 15px;
+        font-size: 0.9rem;
+    }
+
+    .token.stopword {
+        background-color: #f8d7da;
+        text-decoration: line-through;
+    }
+
+    .token.stemmed {
+        background-color: #d1e7dd;
+    }
+
+    .metrics-card {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .metrics-card .value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .metrics-card .label {
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h1 class="card-title">Text Preprocessing Steps</h1>
+                    <p class="card-text">
+                        Text preprocessing is a crucial step in natural language processing (NLP) that transforms raw text into a format suitable for analysis.
+                        This page explains the preprocessing steps applied to app reviews before sentiment analysis.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Demo -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title">Interactive Preprocessing Demo</h2>
+                    <p>Enter a sample review text to see how each preprocessing step transforms the text:</p>
+
+                    <div class="mb-3">
+                        <textarea id="sampleText" class="form-control" rows="3" placeholder="Enter a sample review text...">This app is AMAZING! I've been using it for 3 months and it's so much better than the previous version. The UI is beautiful and intuitive. However, sometimes it crashes when I'm trying to upload photos. Please fix this bug in the next update!</textarea>
+                    </div>
+
+                    <button id="processBtn" class="btn btn-primary">
+                        <i class="fas fa-cogs me-1"></i> Process Text
+                    </button>
+
+                    <div id="processingResults" class="demo-container mt-4 d-none">
+                        <div class="timeline">
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">1</div>
+                                <div class="timeline-content">
+                                    <h4>Original Text</h4>
+                                    <div class="example-box">
+                                        <pre id="originalText"></pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">2</div>
+                                <div class="timeline-content">
+                                    <h4>Lowercase Conversion</h4>
+                                    <p>Convert all text to lowercase for consistency.</p>
+                                    <div class="example-box">
+                                        <pre id="lowercaseText"></pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">3</div>
+                                <div class="timeline-content">
+                                    <h4>URL and Special Character Removal</h4>
+                                    <p>Remove URLs, punctuation, and special characters.</p>
+                                    <div class="example-box">
+                                        <pre id="cleanedText"></pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">4</div>
+                                <div class="timeline-content">
+                                    <h4>Tokenization</h4>
+                                    <p>Split text into individual words (tokens).</p>
+                                    <div class="example-box" id="tokenizedText">
+                                        <!-- Tokens will be added here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">5</div>
+                                <div class="timeline-content">
+                                    <h4>Stopword Removal</h4>
+                                    <p>Remove common words that don't carry much meaning.</p>
+                                    <div class="example-box" id="filteredText">
+                                        <!-- Filtered tokens will be added here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">6</div>
+                                <div class="timeline-content">
+                                    <h4>Stemming</h4>
+                                    <p>Reduce words to their root form.</p>
+                                    <div class="example-box" id="stemmedText">
+                                        <!-- Stemmed tokens will be added here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">7</div>
+                                <div class="timeline-content">
+                                    <h4>Final Processed Text</h4>
+                                    <div class="example-box">
+                                        <pre id="finalText"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Metrics -->
+                        <div class="row mt-4">
+                            <div class="col-md-4">
+                                <div class="card metrics-card">
+                                    <div class="value" id="originalTokenCount">0</div>
+                                    <div class="label">Original Token Count</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card metrics-card">
+                                    <div class="value" id="finalTokenCount">0</div>
+                                    <div class="label">Final Token Count</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card metrics-card">
+                                    <div class="value" id="reductionPercentage">0%</div>
+                                    <div class="label">Reduction Percentage</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preprocessing Steps Explanation -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title">Preprocessing Pipeline</h2>
+                    <p>Our text preprocessing pipeline consists of the following steps:</p>
+
+                    <div class="row mt-4">
+                        <div class="col-md-6 mb-4">
+                            <div class="card preprocessing-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <span class="step-number">1</span>
+                                        <span class="step-title">Lowercase Conversion</span>
+                                    </div>
+                                    <p>
+                                        We convert all text to lowercase to ensure consistency and uniformity.
+                                        This helps the model treat words like "Good" and "good" as the same.
+                                    </p>
+                                    <div class="example-box">
+                                        <strong>Original:</strong> "This app is AMAZING!"<br>
+                                        <strong>Processed:</strong> "this app is amazing!"
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card preprocessing-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <span class="step-number">2</span>
+                                        <span class="step-title">URL and Special Character Removal</span>
+                                    </div>
+                                    <p>
+                                        We remove URLs, punctuation, and special characters that don't contribute to the sentiment.
+                                    </p>
+                                    <div class="example-box">
+                                        <strong>Original:</strong> "Check out https://example.com! It's great."<br>
+                                        <strong>Processed:</strong> "check out  its great"
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card preprocessing-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <span class="step-number">3</span>
+                                        <span class="step-title">Tokenization</span>
+                                    </div>
+                                    <p>
+                                        The text is broken down into individual words or tokens.
+                                        This step involves splitting the text by spaces, enabling the model to analyze each word separately.
+                                    </p>
+                                    <div class="example-box">
+                                        <strong>Original:</strong> "this app is amazing"<br>
+                                        <strong>Processed:</strong> ["this", "app", "is", "amazing"]
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card preprocessing-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <span class="step-number">4</span>
+                                        <span class="step-title">Stopword Removal</span>
+                                    </div>
+                                    <p>
+                                        Common words such as "the," "is," "and," which carry little to no meaning for sentiment analysis, are removed.
+                                        This reduces noise in the data.
+                                    </p>
+                                    <div class="example-box">
+                                        <strong>Original:</strong> ["this", "app", "is", "amazing"]<br>
+                                        <strong>Processed:</strong> ["app", "amazing"]
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card preprocessing-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <span class="step-number">5</span>
+                                        <span class="step-title">Stemming</span>
+                                    </div>
+                                    <p>
+                                        Words are reduced to their root form. Stemming uses a heuristic process that chops off the ends of words.
+                                        For example, "running", "runs", and "ran" would all be reduced to "run".
+                                    </p>
+                                    <div class="example-box">
+                                        <strong>Original:</strong> ["app", "amazing", "crashes", "updating"]<br>
+                                        <strong>Processed:</strong> ["app", "amaz", "crash", "updat"]
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card preprocessing-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <span class="step-number">6</span>
+                                        <span class="step-title">Final Processing</span>
+                                    </div>
+                                    <p>
+                                        The final step involves joining the processed tokens back into text and removing any extra spaces.
+                                        This processed text is then used for sentiment analysis.
+                                    </p>
+                                    <div class="example-box">
+                                        <strong>Original:</strong> "This app is AMAZING! It crashes when updating."<br>
+                                        <strong>Processed:</strong> "app amaz crash updat"
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Why Preprocessing Matters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title">Why Preprocessing Matters</h2>
+                    <p>Text preprocessing is essential for effective sentiment analysis for several reasons:</p>
+
+                    <div class="row mt-4">
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h4 class="card-title"><i class="fas fa-filter text-primary me-2"></i>Noise Reduction</h4>
+                                    <p class="card-text">
+                                        Preprocessing removes irrelevant information like punctuation, special characters, and common words that don't contribute to sentiment.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h4 class="card-title"><i class="fas fa-compress-alt text-primary me-2"></i>Dimensionality Reduction</h4>
+                                    <p class="card-text">
+                                        By reducing words to their root form and removing stopwords, we decrease the number of unique words, making analysis more efficient.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h4 class="card-title"><i class="fas fa-balance-scale text-primary me-2"></i>Standardization</h4>
+                                    <p class="card-text">
+                                        Preprocessing ensures that variations of the same word (e.g., "run", "running", "runs") are treated as a single concept.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Common English stopwords
+    const stopwords = [
+        'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours',
+        'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers',
+        'herself', 'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves',
+        'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those', 'am', 'is', 'are',
+        'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does',
+        'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until',
+        'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into',
+        'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down',
+        'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
+        'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more',
+        'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so',
+        'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should', 'now',
+        'app', 'version', 'update', 'please', 'would', 'could', 'im', 'ive', 'use', 'using'
+    ];
+
+    // Simple stemming function (for demo purposes)
+    function simpleStem(word) {
+        // Very basic stemming rules for demonstration
+        if (word.endsWith('ing')) return word.slice(0, -3);
+        if (word.endsWith('ed')) return word.slice(0, -2);
+        if (word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+        if (word.endsWith('ly')) return word.slice(0, -2);
+        if (word.endsWith('ment')) return word.slice(0, -4);
+        if (word.length > 4 && word.endsWith('e')) return word.slice(0, -1);
+        return word;
+    }
+
+    // Process button click handler
+    document.getElementById('processBtn').addEventListener('click', function() {
+        const text = document.getElementById('sampleText').value;
+
+        if (!text.trim()) {
+            alert('Please enter some text to process.');
+            return;
+        }
+
+        // Show results container
+        document.getElementById('processingResults').classList.remove('d-none');
+
+        // Step 1: Original text
+        document.getElementById('originalText').textContent = text;
+
+        // Step 2: Lowercase
+        const lowercase = text.toLowerCase();
+        document.getElementById('lowercaseText').textContent = lowercase;
+
+        // Step 3: Remove URLs, punctuation, and special characters
+        const cleaned = lowercase.replace(/https?:\/\/\S+|www\.\S+/g, '')
+                                .replace(/[^\w\s]/g, '')
+                                .replace(/\d+/g, '')
+                                .replace(/\s+/g, ' ')
+                                .trim();
+        document.getElementById('cleanedText').textContent = cleaned;
+
+        // Step 4: Tokenization
+        const tokens = cleaned.split(' ');
+        const tokenizedContainer = document.getElementById('tokenizedText');
+        tokenizedContainer.innerHTML = '';
+        tokens.forEach(token => {
+            const tokenElement = document.createElement('span');
+            tokenElement.className = 'token';
+            tokenElement.textContent = token;
+            tokenizedContainer.appendChild(tokenElement);
+        });
+
+        // Step 5: Stopword removal
+        const filteredTokens = tokens.filter(token => !stopwords.includes(token));
+        const filteredContainer = document.getElementById('filteredText');
+        filteredContainer.innerHTML = '';
+        tokens.forEach(token => {
+            const tokenElement = document.createElement('span');
+            tokenElement.className = 'token';
+            if (stopwords.includes(token)) {
+                tokenElement.classList.add('stopword');
+            }
+            tokenElement.textContent = token;
+            filteredContainer.appendChild(tokenElement);
+        });
+
+        // Step 6: Stemming
+        const stemmedTokens = filteredTokens.map(token => simpleStem(token));
+        const stemmedContainer = document.getElementById('stemmedText');
+        stemmedContainer.innerHTML = '';
+        filteredTokens.forEach((token, index) => {
+            const tokenElement = document.createElement('span');
+            tokenElement.className = 'token';
+            if (token !== stemmedTokens[index]) {
+                tokenElement.classList.add('stemmed');
+                tokenElement.textContent = `${token} → ${stemmedTokens[index]}`;
+            } else {
+                tokenElement.textContent = token;
+            }
+            stemmedContainer.appendChild(tokenElement);
+        });
+
+        // Step 7: Final processed text
+        const finalText = stemmedTokens.join(' ');
+        document.getElementById('finalText').textContent = finalText;
+
+        // Update metrics
+        const originalTokenCount = tokens.length;
+        const finalTokenCount = stemmedTokens.length;
+        const reductionPercentage = Math.round((1 - finalTokenCount / originalTokenCount) * 100);
+
+        document.getElementById('originalTokenCount').textContent = originalTokenCount;
+        document.getElementById('finalTokenCount').textContent = finalTokenCount;
+        document.getElementById('reductionPercentage').textContent = reductionPercentage + '%';
+    });
+
+    // Process the default text on page load
+    document.getElementById('processBtn').click();
+});
+</script>
+{% endblock %}
