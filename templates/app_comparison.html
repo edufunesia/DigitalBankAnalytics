@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Comparison</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Chart.js -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .comparison-header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 2rem 0;
+            border-radius: 0 0 20px 20px;
+            margin-bottom: 2rem;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a0cb0 0%, #1565e0 100%);
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #bd2130 0%, #a71d2a 100%);
+            transform: translateY(-2px);
+        }
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+        .app-card {
+            position: relative;
+            padding: 1.5rem;
+        }
+        .app-card .remove-app {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #f8d7da;
+            color: #721c24;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .app-card .remove-app:hover {
+            background-color: #f5c6cb;
+            transform: scale(1.1);
+        }
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 15px;
+            object-fit: cover;
+            margin-bottom: 1rem;
+        }
+        .app-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .app-developer {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .app-rating {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .app-rating .stars {
+            color: #ffc107;
+            margin-right: 0.5rem;
+        }
+        .app-rating .score {
+            font-weight: 600;
+        }
+        .app-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .app-stat {
+            text-align: center;
+            flex: 1;
+        }
+        .app-stat .value {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        .app-stat .label {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 2rem;
+        }
+        .comparison-table {
+            margin-top: 2rem;
+        }
+        .comparison-table th {
+            background-color: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .comparison-table td {
+            vertical-align: middle;
+        }
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem 0;
+        }
+        .empty-state i {
+            font-size: 4rem;
+            color: #dee2e6;
+            margin-bottom: 1rem;
+        }
+        .empty-state h3 {
+            font-size: 1.5rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+        }
+        .empty-state p {
+            color: #adb5bd;
+            max-width: 500px;
+            margin: 0 auto 1.5rem;
+        }
+        footer {
+            margin-top: 4rem;
+            padding: 2rem 0;
+            background-color: #f1f3f5;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="toast align-items-center text-white bg-{{ category }} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                {{ message }}
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Comparison Header -->
+    <div class="comparison-header">
+        <div class="container text-center">
+            <h1 class="display-5 fw-bold mb-2">App Comparison</h1>
+            <p class="lead mb-0">Compare multiple apps side by side</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Back to Home Button -->
+        <div class="mb-4">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Home
+            </a>
+        </div>
+
+        <!-- Add App Form -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Add App to Comparison</h5>
+                <form id="addAppForm" class="row g-3">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" id="appIdInput" placeholder="Enter Google Play Store App ID" required>
+                        </div>
+                        <div class="form-text">Enter the app ID from Google Play Store URL (e.g., id.co.bankbkemobile.digitalbank)</div>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary w-100" id="addAppBtn">
+                            <i class="fas fa-plus me-2"></i>Add to Comparison
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loadingContainer" class="text-center my-5 d-none">
+            <div class="spinner-border loading-spinner text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Fetching app data...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state">
+            <i class="fas fa-chart-bar"></i>
+            <h3>No Apps to Compare</h3>
+            <p>Add apps using the form above to start comparing them side by side.</p>
+        </div>
+
+        <!-- Comparison Container -->
+        <div id="comparisonContainer" class="d-none">
+            <!-- App Cards -->
+            <div class="row" id="appCardsContainer">
+                <!-- App cards will be added here dynamically -->
+            </div>
+
+            <!-- Charts -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Ratings Comparison</h5>
+                    <div class="chart-container">
+                        <canvas id="ratingsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Sentiment Analysis</h5>
+                    <div class="chart-container">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Detailed Comparison</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover comparison-table" id="comparisonTable">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <!-- App names will be added here dynamically -->
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Rating</td>
+                                    <!-- Ratings will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Reviews Count</td>
+                                    <!-- Review counts will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Installs</td>
+                                    <!-- Install counts will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Size</td>
+                                    <!-- App sizes will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Last Updated</td>
+                                    <!-- Last updated dates will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Positive Reviews</td>
+                                    <!-- Positive review counts will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Neutral Reviews</td>
+                                    <!-- Neutral review counts will be added here dynamically -->
+                                </tr>
+                                <tr>
+                                    <td>Negative Reviews</td>
+                                    <!-- Negative review counts will be added here dynamically -->
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center">
+        <div class="container">
+            <p>© 2023 App Review Analyzer. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize variables
+        const apps = [];
+        let ratingsChart = null;
+        let sentimentChart = null;
+        
+        // DOM elements
+        const addAppForm = document.getElementById('addAppForm');
+        const appIdInput = document.getElementById('appIdInput');
+        const addAppBtn = document.getElementById('addAppBtn');
+        const loadingContainer = document.getElementById('loadingContainer');
+        const emptyState = document.getElementById('emptyState');
+        const comparisonContainer = document.getElementById('comparisonContainer');
+        const appCardsContainer = document.getElementById('appCardsContainer');
+        const comparisonTable = document.getElementById('comparisonTable');
+        
+        // Initialize toasts
+        var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+        var toastList = toastElList.map(function(toastEl) {
+            var toast = new bootstrap.Toast(toastEl, {
+                autohide: true,
+                delay: 5000
+            });
+            toast.show();
+            return toast;
+        });
+        
+        // Handle form submission
+        addAppForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const appId = appIdInput.value.trim();
+            if (!appId) {
+                showToast('danger', 'Please enter an app ID');
+                return;
+            }
+            
+            // Check if app is already in the comparison
+            if (apps.some(app => app.app_id === appId)) {
+                showToast('warning', 'This app is already in the comparison');
+                return;
+            }
+            
+            // Show loading state
+            addAppBtn.disabled = true;
+            addAppBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
+            loadingContainer.classList.remove('d-none');
+            
+            // Fetch app details and reviews
+            fetchAppData(appId);
+        });
+        
+        function fetchAppData(appId) {
+            // Clean up app ID if it's a URL
+            if (appId.includes('play.google.com') && appId.includes('id=')) {
+                try {
+                    appId = appId.split('id=')[1].split('&')[0];
+                } catch (e) {
+                    showToast('danger', 'Invalid Google Play URL');
+                    resetAddButton();
+                    loadingContainer.classList.add('d-none');
+                    return;
+                }
+            }
+            
+            // Fetch app info
+            fetch('/app_info/' + appId)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch app details');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Fetch reviews for sentiment analysis
+                        return fetch('/fetch_app_reviews_for_comparison', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ app_id: appId, count: 100 }),
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Failed to fetch app reviews');
+                            }
+                            return response.json();
+                        })
+                        .then(reviewsData => {
+                            if (reviewsData.status === 'success') {
+                                // Combine app info and reviews data
+                                const appData = {
+                                    app_id: appId,
+                                    info: data.app_info,
+                                    reviews: reviewsData.data,
+                                    sentiment: reviewsData.sentiment_metrics
+                                };
+                                
+                                // Add app to comparison
+                                addAppToComparison(appData);
+                                
+                                // Clear input
+                                appIdInput.value = '';
+                                
+                                // Show success message
+                                showToast('success', `Added ${data.app_info.title} to comparison`);
+                            } else {
+                                throw new Error(reviewsData.message || 'Failed to fetch app reviews');
+                            }
+                        });
+                    } else {
+                        throw new Error(data.message || 'Failed to fetch app details');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('danger', 'Error adding app: ' + error.message);
+                })
+                .finally(() => {
+                    resetAddButton();
+                    loadingContainer.classList.add('d-none');
+                });
+        }
+        
+        function addAppToComparison(appData) {
+            // Add app to array
+            apps.push(appData);
+            
+            // Hide empty state and show comparison container
+            emptyState.classList.add('d-none');
+            comparisonContainer.classList.remove('d-none');
+            
+            // Add app card
+            addAppCard(appData);
+            
+            // Update comparison table
+            updateComparisonTable();
+            
+            // Update charts
+            updateCharts();
+        }
+        
+        function addAppCard(appData) {
+            const app = appData.info;
+            const appId = appData.app_id;
+            
+            // Create app card
+            const cardCol = document.createElement('div');
+            cardCol.className = 'col-md-4 col-lg-3';
+            cardCol.dataset.appId = appId;
+            
+            // Format rating stars
+            let starsHtml = '';
+            const rating = parseFloat(app.score) || 0;
+            for (let i = 1; i <= 5; i++) {
+                if (i <= Math.floor(rating)) {
+                    starsHtml += '<i class="fas fa-star"></i>';
+                } else if (i - 0.5 <= rating) {
+                    starsHtml += '<i class="fas fa-star-half-alt"></i>';
+                } else {
+                    starsHtml += '<i class="far fa-star"></i>';
+                }
+            }
+            
+            cardCol.innerHTML = `
+                <div class="card app-card">
+                    <button type="button" class="remove-app" data-app-id="${appId}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="text-center">
+                        <img src="${app.icon || 'https://via.placeholder.com/80'}" alt="${app.title}" class="app-icon">
+                        <h5 class="app-title">${app.title || 'Unknown App'}</h5>
+                        <p class="app-developer">${app.developer || 'Unknown Developer'}</p>
+                    </div>
+                    <div class="app-rating">
+                        <div class="stars">${starsHtml}</div>
+                        <div class="score">${rating.toFixed(1)}</div>
+                    </div>
+                    <div class="app-stats">
+                        <div class="app-stat">
+                            <div class="value">${appData.sentiment.positive || 0}</div>
+                            <div class="label">Positive</div>
+                        </div>
+                        <div class="app-stat">
+                            <div class="value">${appData.sentiment.neutral || 0}</div>
+                            <div class="label">Neutral</div>
+                        </div>
+                        <div class="app-stat">
+                            <div class="value">${appData.sentiment.negative || 0}</div>
+                            <div class="label">Negative</div>
+                        </div>
+                    </div>
+                    <a href="/app/${appId}/reviews" class="btn btn-sm btn-outline-primary" target="_blank">
+                        <i class="fas fa-external-link-alt me-1"></i> View Reviews
+                    </a>
+                </div>
+            `;
+            
+            // Add event listener to remove button
+            cardCol.querySelector('.remove-app').addEventListener('click', function() {
+                removeApp(appId);
+            });
+            
+            // Add card to container
+            appCardsContainer.appendChild(cardCol);
+        }
+        
+        function removeApp(appId) {
+            // Remove app from array
+            const index = apps.findIndex(app => app.app_id === appId);
+            if (index !== -1) {
+                apps.splice(index, 1);
+            }
+            
+            // Remove app card
+            const cardCol = appCardsContainer.querySelector(`[data-app-id="${appId}"]`);
+            if (cardCol) {
+                cardCol.remove();
+            }
+            
+            // Update comparison table
+            updateComparisonTable();
+            
+            // Update charts
+            updateCharts();
+            
+            // Show empty state if no apps left
+            if (apps.length === 0) {
+                emptyState.classList.remove('d-none');
+                comparisonContainer.classList.add('d-none');
+            }
+            
+            // Show toast
+            showToast('info', 'App removed from comparison');
+        }
+        
+        function updateComparisonTable() {
+            // Update table header
+            const headerRow = comparisonTable.querySelector('thead tr');
+            headerRow.innerHTML = '<th>Metric</th>';
+            
+            apps.forEach(app => {
+                const th = document.createElement('th');
+                th.textContent = app.info.title || 'Unknown App';
+                headerRow.appendChild(th);
+            });
+            
+            // Update table rows
+            const rows = comparisonTable.querySelectorAll('tbody tr');
+            
+            // Rating row
+            rows[0].innerHTML = '<td>Rating</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                const rating = parseFloat(app.info.score) || 0;
+                td.innerHTML = `<strong>${rating.toFixed(1)}</strong> <small class="text-muted">/5</small>`;
+                rows[0].appendChild(td);
+            });
+            
+            // Reviews count row
+            rows[1].innerHTML = '<td>Reviews Count</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = app.info.reviews || 'N/A';
+                rows[1].appendChild(td);
+            });
+            
+            // Installs row
+            rows[2].innerHTML = '<td>Installs</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = app.info.installs || 'N/A';
+                rows[2].appendChild(td);
+            });
+            
+            // Size row
+            rows[3].innerHTML = '<td>Size</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = app.info.size || 'N/A';
+                rows[3].appendChild(td);
+            });
+            
+            // Last updated row
+            rows[4].innerHTML = '<td>Last Updated</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = formatDate(app.info.updated) || 'N/A';
+                rows[4].appendChild(td);
+            });
+            
+            // Positive reviews row
+            rows[5].innerHTML = '<td>Positive Reviews</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = app.sentiment.positive || 0;
+                rows[5].appendChild(td);
+            });
+            
+            // Neutral reviews row
+            rows[6].innerHTML = '<td>Neutral Reviews</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = app.sentiment.neutral || 0;
+                rows[6].appendChild(td);
+            });
+            
+            // Negative reviews row
+            rows[7].innerHTML = '<td>Negative Reviews</td>';
+            apps.forEach(app => {
+                const td = document.createElement('td');
+                td.textContent = app.sentiment.negative || 0;
+                rows[7].appendChild(td);
+            });
+        }
+        
+        function updateCharts() {
+            // Destroy existing charts
+            if (ratingsChart) {
+                ratingsChart.destroy();
+            }
+            if (sentimentChart) {
+                sentimentChart.destroy();
+            }
+            
+            // Create ratings chart
+            const ratingsCtx = document.getElementById('ratingsChart').getContext('2d');
+            ratingsChart = new Chart(ratingsCtx, {
+                type: 'bar',
+                data: {
+                    labels: apps.map(app => app.info.title || 'Unknown App'),
+                    datasets: [{
+                        label: 'Rating',
+                        data: apps.map(app => parseFloat(app.info.score) || 0),
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5,
+                            title: {
+                                display: true,
+                                text: 'Rating (out of 5)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Create sentiment chart
+            const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+            sentimentChart = new Chart(sentimentCtx, {
+                type: 'bar',
+                data: {
+                    labels: apps.map(app => app.info.title || 'Unknown App'),
+                    datasets: [
+                        {
+                            label: 'Positive',
+                            data: apps.map(app => app.sentiment.positive || 0),
+                            backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                            borderColor: 'rgba(40, 167, 69, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Neutral',
+                            data: apps.map(app => app.sentiment.neutral || 0),
+                            backgroundColor: 'rgba(255, 193, 7, 0.7)',
+                            borderColor: 'rgba(255, 193, 7, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Negative',
+                            data: apps.map(app => app.sentiment.negative || 0),
+                            backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Reviews'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function resetAddButton() {
+            addAppBtn.disabled = false;
+            addAppBtn.innerHTML = '<i class="fas fa-plus me-2"></i>Add to Comparison';
+        }
+        
+        function formatDate(timestamp) {
+            if (!timestamp) return '';
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleDateString();
+            } catch (e) {
+                return timestamp.toString();
+            }
+        }
+        
+        function showToast(type, message) {
+            const toastContainer = document.querySelector('.toast-container');
+            
+            const toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+            
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toastEl);
+            
+            const toast = new bootstrap.Toast(toastEl, {
+                autohide: true,
+                delay: 5000
+            });
+            
+            toast.show();
+            
+            // Remove toast from DOM after it's hidden
+            toastEl.addEventListener('hidden.bs.toast', function() {
+                toastEl.remove();
+            });
+        }
+    });
+    </script>
+</body>
+</html>

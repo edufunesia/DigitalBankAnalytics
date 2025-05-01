@@ -1,0 +1,749 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ app_name }} - TF-IDF Analysis{% endblock %}
+
+{% block extra_head %}
+<style>
+    .card {
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .term-card {
+        cursor: pointer;
+    }
+
+    .term-card.active {
+        border-color: #0d6efd;
+        border-width: 2px;
+    }
+
+    .term-rank {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+
+    .term-score {
+        font-weight: bold;
+        color: #0d6efd;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 20px;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-spinner {
+        width: 4rem;
+        height: 4rem;
+    }
+
+    .formula {
+        background-color: #f8f9fa;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        margin: 10px 0;
+    }
+
+    .formula-highlight {
+        color: #0d6efd;
+        font-weight: bold;
+    }
+
+    .stat-card {
+        text-align: center;
+        padding: 15px;
+    }
+
+    .stat-card .value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .stat-card .label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+
+    .term-badge {
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #e9ecef;
+        border-radius: 20px;
+        margin: 3px;
+        font-size: 0.9rem;
+        transition: background-color 0.2s ease;
+    }
+
+    .term-badge:hover {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    .example-box {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 15px;
+        border-left: 4px solid #0d6efd;
+    }
+
+    .progress-tfidf {
+        height: 8px;
+        border-radius: 4px;
+    }
+
+    .tfidf-explanation {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .tfidf-explanation.show {
+        max-height: 1000px;
+    }
+
+    .toggle-explanation {
+        cursor: pointer;
+        color: #0d6efd;
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <img src="{{ app_info.icon }}" alt="{{ app_name }} icon" class="me-3" width="64" height="64">
+                        <div>
+                            <h1 class="card-title mb-0">{{ app_name }}</h1>
+                            <div class="text-muted">{{ app_info.developer }}</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <a href="{{ url_for('app_details', app_id=app_id) }}" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-info-circle me-1"></i> App Details
+                        </a>
+                        <a href="{{ url_for('app_reviews', app_id=app_id) }}" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-comments me-1"></i> Reviews
+                        </a>
+                        <a href="{{ url_for('app_aspect_analysis', app_id=app_id) }}" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-chart-pie me-1"></i> Aspect Analysis
+                        </a>
+                        <a href="{{ url_for('app_data_analysis', app_id=app_id) }}" class="btn btn-outline-primary">
+                            <i class="fas fa-chart-bar me-1"></i> Data Analysis
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title">TF-IDF Analysis</h2>
+                    <p class="card-text">
+                        Term Frequency-Inverse Document Frequency (TF-IDF) is a statistical measure that evaluates how important a word is to a document in a collection of documents.
+                    </p>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="reviewCount" class="form-label">Number of reviews to analyze</label>
+                            <select id="reviewCount" class="form-select">
+                                <option value="100">100 reviews</option>
+                                <option value="200">200 reviews</option>
+                                <option value="300">300 reviews</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="maxFeatures" class="form-label">Maximum number of terms</label>
+                            <select id="maxFeatures" class="form-select">
+                                <option value="30">30 terms</option>
+                                <option value="50" selected>50 terms</option>
+                                <option value="100">100 terms</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="minDocFreq" class="form-label">Minimum document frequency</label>
+                            <select id="minDocFreq" class="form-select">
+                                <option value="1">1 document</option>
+                                <option value="2" selected>2 documents</option>
+                                <option value="5">5 documents</option>
+                                <option value="10">10 documents</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="analyzeBtn" class="btn btn-primary">
+                        <i class="fas fa-calculator me-1"></i> Calculate TF-IDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" class="loading-overlay d-none">
+        <div class="spinner-border text-light loading-spinner" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Analysis results -->
+    <div id="resultsContainer" class="d-none">
+        <!-- TF-IDF Explanation -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">What is TF-IDF?</h3>
+                        <p>
+                            TF-IDF stands for Term Frequency-Inverse Document Frequency. It's a numerical statistic that reflects how important a word is to a document in a collection.
+                        </p>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><i class="fas fa-calculator text-primary me-2"></i>Term Frequency (TF)</h5>
+                                        <p class="card-text">
+                                            Measures how frequently a term occurs in a document.
+                                        </p>
+                                        <div class="formula">
+                                            TF(t) = <span class="formula-highlight">(Number of times term t appears in a document)</span> / (Total number of terms in the document)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><i class="fas fa-chart-line text-primary me-2"></i>Inverse Document Frequency (IDF)</h5>
+                                        <p class="card-text">
+                                            Measures how important a term is across all documents.
+                                        </p>
+                                        <div class="formula">
+                                            IDF(t) = log(<span class="formula-highlight">Total number of documents</span> / Number of documents with term t)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><i class="fas fa-star text-primary me-2"></i>TF-IDF Score</h5>
+                                        <p class="card-text">
+                                            Combines TF and IDF to find important terms that are not too common.
+                                        </p>
+                                        <div class="formula">
+                                            TF-IDF(t) = <span class="formula-highlight">TF(t) × IDF(t)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Why is TF-IDF useful?</strong> It helps identify important terms in app reviews by giving higher weights to terms that appear frequently in a specific review but are rare across all reviews.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Corpus Statistics -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Corpus Statistics</h3>
+
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <div class="card stat-card">
+                                    <div class="value" id="numDocuments">0</div>
+                                    <div class="label">Total Reviews</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card stat-card">
+                                    <div class="value" id="avgDocLength">0</div>
+                                    <div class="label">Avg. Words per Review</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card stat-card">
+                                    <div class="value" id="vocabSize">0</div>
+                                    <div class="label">Vocabulary Size</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card stat-card">
+                                    <div class="value" id="maxIdf">0</div>
+                                    <div class="label">Max IDF Value</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preprocessing Statistics -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <h5>Preprocessing Statistics</h5>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-4 text-center">
+                                                <h6>Original Tokens</h6>
+                                                <div class="h4" id="originalTokens">0</div>
+                                            </div>
+                                            <div class="col-md-4 text-center">
+                                                <h6>Processed Tokens</h6>
+                                                <div class="h4" id="processedTokens">0</div>
+                                            </div>
+                                            <div class="col-md-4 text-center">
+                                                <h6>Reduction</h6>
+                                                <div class="h4" id="reductionPercentage">0%</div>
+                                            </div>
+                                        </div>
+                                        <div class="progress mt-3">
+                                            <div id="preprocessingProgress" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <div class="text-muted text-center mt-2">
+                                            <small>Preprocessing removes stopwords, punctuation, and applies stemming to focus on meaningful content</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <h5>Top Terms by TF-IDF Score</h5>
+                            <div id="topTermsBadges" class="mt-2">
+                                <!-- Top terms will be added here as badges -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TF-IDF Results -->
+        <div class="row">
+            <div class="col-md-5 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="card-title">Top Terms by TF-IDF</h3>
+                        <p class="card-text">
+                            Click on a term to see detailed information and examples.
+                        </p>
+
+                        <div class="list-group mt-3" id="termsList">
+                            <!-- Terms will be added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="card-title" id="selectedTermTitle">Term Details</h3>
+                        <p class="card-text" id="noTermSelected">
+                            Select a term from the list to see detailed information.
+                        </p>
+
+                        <div id="termDetails" class="d-none">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Document Frequency</h5>
+                                            <p class="card-text" id="docFrequency">0 reviews</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h5 class="card-title">IDF Value</h5>
+                                            <p class="card-text" id="idfValue">0.0</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h5>TF-IDF Calculation</h5>
+                            <div class="toggle-explanation" id="toggleExplanation">Show calculation details</div>
+                            <div class="tfidf-explanation" id="tfidfExplanation">
+                                <div class="card bg-light mt-2">
+                                    <div class="card-body">
+                                        <h6>Term Frequency (TF)</h6>
+                                        <p id="tfExplanation"></p>
+                                        <div class="formula" id="tfFormula"></div>
+
+                                        <h6 class="mt-3">Inverse Document Frequency (IDF)</h6>
+                                        <p id="idfExplanation"></p>
+                                        <div class="formula" id="idfFormula"></div>
+
+                                        <h6 class="mt-3">TF-IDF Score</h6>
+                                        <p id="tfidfExplanationText"></p>
+                                        <div class="formula" id="tfidfFormula"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h5 class="mt-4">Example Reviews</h5>
+                            <div id="exampleReviews">
+                                <!-- Example reviews will be added here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TF-IDF Visualization -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">TF-IDF Score Visualization</h3>
+                        <div class="chart-container">
+                            <canvas id="tfidfChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const appId = '{{ app_id }}';
+    let tfidfChart = null;
+    let currentTermData = null;
+
+    // Analyze button click handler
+    document.getElementById('analyzeBtn').addEventListener('click', function() {
+        const count = document.getElementById('reviewCount').value;
+        const maxFeatures = document.getElementById('maxFeatures').value;
+        const minDocFreq = document.getElementById('minDocFreq').value;
+        performTfidfAnalysis(appId, count, maxFeatures, minDocFreq);
+    });
+
+    // Toggle explanation click handler
+    document.getElementById('toggleExplanation').addEventListener('click', function() {
+        const explanation = document.getElementById('tfidfExplanation');
+        explanation.classList.toggle('show');
+        this.textContent = explanation.classList.contains('show') ? 'Hide calculation details' : 'Show calculation details';
+    });
+
+    // Perform TF-IDF analysis
+    function performTfidfAnalysis(appId, count, maxFeatures, minDocFreq) {
+        // Show loading overlay
+        document.getElementById('loadingOverlay').classList.remove('d-none');
+
+        // Hide results container
+        document.getElementById('resultsContainer').classList.add('d-none');
+
+        // Fetch TF-IDF analysis
+        fetch('/fetch_tfidf_analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                app_id: appId,
+                count: count,
+                max_features: maxFeatures,
+                min_df: minDocFreq
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Update corpus statistics
+                updateCorpusStats(data.data.corpus_stats);
+
+                // Update top terms badges
+                updateTopTermsBadges(data.data.top_terms);
+
+                // Populate terms list
+                populateTermsList(data.data.term_details);
+
+                // Create TF-IDF chart
+                createTfidfChart(data.data.term_details.slice(0, 20));
+
+                // Show results container
+                document.getElementById('resultsContainer').classList.remove('d-none');
+
+                // Select the first term by default
+                if (data.data.term_details.length > 0) {
+                    selectTerm(data.data.term_details[0]);
+                }
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while performing TF-IDF analysis.');
+        })
+        .finally(() => {
+            // Hide loading overlay
+            document.getElementById('loadingOverlay').classList.add('d-none');
+        });
+    }
+
+    // Update corpus statistics
+    function updateCorpusStats(stats) {
+        document.getElementById('numDocuments').textContent = stats.num_documents;
+        document.getElementById('avgDocLength').textContent = Math.round(stats.avg_document_length);
+        document.getElementById('vocabSize').textContent = stats.vocabulary_size;
+        document.getElementById('maxIdf').textContent = stats.max_idf.toFixed(2);
+
+        // Update preprocessing statistics if available
+        if (stats.preprocessing_stats) {
+            const preprocessingStats = stats.preprocessing_stats;
+            document.getElementById('originalTokens').textContent = preprocessingStats.original_tokens.toLocaleString();
+            document.getElementById('processedTokens').textContent = preprocessingStats.processed_tokens.toLocaleString();
+            document.getElementById('reductionPercentage').textContent = preprocessingStats.reduction_percentage + '%';
+
+            // Update progress bar
+            const progressBar = document.getElementById('preprocessingProgress');
+            progressBar.style.width = preprocessingStats.reduction_percentage + '%';
+            progressBar.setAttribute('aria-valuenow', preprocessingStats.reduction_percentage);
+        }
+    }
+
+    // Update top terms badges
+    function updateTopTermsBadges(terms) {
+        const container = document.getElementById('topTermsBadges');
+        container.innerHTML = '';
+
+        terms.forEach(term => {
+            const badge = document.createElement('span');
+            badge.className = 'term-badge';
+            badge.textContent = term;
+            container.appendChild(badge);
+        });
+    }
+
+    // Populate terms list
+    function populateTermsList(terms) {
+        const container = document.getElementById('termsList');
+        container.innerHTML = '';
+
+        terms.forEach((term, index) => {
+            const listItem = document.createElement('a');
+            listItem.className = 'list-group-item list-group-item-action term-card';
+            listItem.setAttribute('data-term-index', index);
+
+            // Calculate percentage for progress bar
+            const maxTfidf = terms[0].avg_tfidf;
+            const percentage = (term.avg_tfidf / maxTfidf) * 100;
+
+            listItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="term-rank">${index + 1}</span>
+                        <span class="term-name">${term.term}</span>
+                    </div>
+                    <span class="term-score">${term.avg_tfidf.toFixed(4)}</span>
+                </div>
+                <div class="progress mt-2 progress-tfidf">
+                    <div class="progress-bar" role="progressbar" style="width: ${percentage}%"
+                        aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+            `;
+
+            listItem.addEventListener('click', function() {
+                // Remove active class from all terms
+                document.querySelectorAll('.term-card').forEach(item => {
+                    item.classList.remove('active');
+                });
+
+                // Add active class to selected term
+                this.classList.add('active');
+
+                // Show term details
+                selectTerm(terms[index]);
+            });
+
+            container.appendChild(listItem);
+        });
+    }
+
+    // Select a term and show its details
+    function selectTerm(termData) {
+        currentTermData = termData;
+
+        // Update term title
+        document.getElementById('selectedTermTitle').textContent = `Term: "${termData.term}"`;
+
+        // Hide no term selected message
+        document.getElementById('noTermSelected').classList.add('d-none');
+
+        // Show term details
+        document.getElementById('termDetails').classList.remove('d-none');
+
+        // Update term details
+        document.getElementById('docFrequency').textContent = `${termData.document_frequency} reviews`;
+        document.getElementById('idfValue').textContent = termData.idf.toFixed(4);
+
+        // Update calculation details
+        document.getElementById('tfExplanation').textContent = termData.calculation_example.tf_explanation;
+        document.getElementById('tfFormula').textContent = `TF = ${termData.calculation_example.example_tf.toFixed(6)}`;
+
+        document.getElementById('idfExplanation').textContent = termData.calculation_example.idf_explanation;
+        document.getElementById('idfFormula').textContent = `IDF = ${termData.calculation_example.example_idf.toFixed(6)}`;
+
+        document.getElementById('tfidfExplanationText').textContent = termData.calculation_example.tfidf_explanation;
+        document.getElementById('tfidfFormula').textContent = `TF-IDF = ${termData.calculation_example.example_tf.toFixed(6)} × ${termData.calculation_example.example_idf.toFixed(6)} = ${termData.calculation_example.example_tfidf.toFixed(6)}`;
+
+        // Update example reviews
+        const examplesContainer = document.getElementById('exampleReviews');
+        examplesContainer.innerHTML = '';
+
+        if (termData.document_examples.length === 0) {
+            const noExamples = document.createElement('div');
+            noExamples.className = 'alert alert-warning';
+            noExamples.textContent = 'No examples available for this term.';
+            examplesContainer.appendChild(noExamples);
+        } else {
+            termData.document_examples.forEach((example, index) => {
+                const exampleBox = document.createElement('div');
+                exampleBox.className = 'example-box mb-3';
+
+                exampleBox.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <h6>Example ${index + 1}</h6>
+                        <span class="badge bg-primary">TF-IDF: ${example.tfidf_score.toFixed(4)}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Original Text:</strong>
+                        <p>${example.text}</p>
+                    </div>
+                    ${example.processed_text ? `
+                    <div class="mt-2 pt-2 border-top">
+                        <strong>Processed Text:</strong>
+                        <p class="text-muted"><code>${example.processed_text}</code></p>
+                    </div>
+                    ` : ''}
+                `;
+
+                examplesContainer.appendChild(exampleBox);
+            });
+        }
+    }
+
+    // Create TF-IDF chart
+    function createTfidfChart(terms) {
+        const ctx = document.getElementById('tfidfChart').getContext('2d');
+
+        // Destroy existing chart if it exists
+        if (tfidfChart) {
+            tfidfChart.destroy();
+        }
+
+        // Prepare data for chart
+        const labels = terms.map(term => term.term);
+        const data = terms.map(term => term.avg_tfidf);
+
+        // Create new chart
+        tfidfChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'TF-IDF Score',
+                    data: data,
+                    backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `TF-IDF: ${context.raw.toFixed(4)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'TF-IDF Score'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Terms'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Initial analysis with default values
+    performTfidfAnalysis(appId, 100, 50, 2);
+});
+</script>
+{% endblock %}

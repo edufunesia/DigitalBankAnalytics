@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Review Analyzer</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 4rem 0;
+            border-radius: 0 0 20px 20px;
+            margin-bottom: 2rem;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        }
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 20px;
+            font-size: 1rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 25px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a0cb0 0%, #1565e0 100%);
+            transform: translateY(-2px);
+        }
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+        .recent-apps {
+            margin-top: 2rem;
+        }
+        .app-badge {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 5px;
+            background-color: #f1f3f5;
+            border-radius: 20px;
+            color: #495057;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        .app-badge:hover {
+            background-color: #e9ecef;
+            color: #212529;
+            transform: translateY(-2px);
+        }
+        footer {
+            margin-top: 4rem;
+            padding: 2rem 0;
+            background-color: #f1f3f5;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="toast align-items-center text-white bg-{{ category }} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                {{ message }}
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 fw-bold mb-3">App Review Analyzer</h1>
+            <p class="lead mb-4">Analyze app reviews from Google Play Store with sentiment analysis and data visualization</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- App ID Input Form -->
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-body p-4">
+                        <h2 class="card-title text-center mb-4">Enter App ID</h2>
+                        <form id="appForm" action="{{ url_for('search_app') }}" method="POST">
+                            <div class="mb-3">
+                                <label for="app_id" class="form-label">Google Play Store App ID</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                    <input type="text" class="form-control" id="app_id" name="app_id"
+                                           placeholder="e.g., id.co.bankbkemobile.digitalbank" required>
+                                </div>
+                                <div class="form-text">Enter the app ID from Google Play Store URL (e.g., id.co.bankbkemobile.digitalbank)</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="review_count" class="form-label">Number of Reviews to Scrape</label>
+                                <div class="btn-group w-100" role="group" aria-label="Review count selection">
+                                    <input type="radio" class="btn-check" name="review_count" id="count100" value="100" checked>
+                                    <label class="btn btn-outline-primary" for="count100">100 Reviews</label>
+
+                                    <input type="radio" class="btn-check" name="review_count" id="count200" value="200">
+                                    <label class="btn btn-outline-primary" for="count200">200 Reviews</label>
+
+                                    <input type="radio" class="btn-check" name="review_count" id="count300" value="300">
+                                    <label class="btn btn-outline-primary" for="count300">300 Reviews</label>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" id="checkAppDetailsBtn" class="btn btn-outline-primary flex-grow-1">
+                                    <i class="fas fa-info-circle me-2"></i>Check App Details
+                                </button>
+                                <button type="submit" class="btn btn-primary flex-grow-1">
+                                    <i class="fas fa-chart-bar me-2"></i>Analyze Reviews
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="row justify-content-center mb-5">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title mb-3">Quick Links</h5>
+                        <a href="{{ url_for('app_comparison') }}" class="btn btn-primary">
+                            <i class="fas fa-chart-bar me-2"></i>Compare Multiple Apps
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="row mt-5">
+            <div class="col-12 text-center mb-4">
+                <h2>Features</h2>
+                <p class="text-muted">Powerful tools to analyze app reviews</p>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card h-100 p-4">
+                    <div class="feature-icon mx-auto">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <h3 class="h5 text-center">Sentiment Analysis</h3>
+                    <p class="text-muted text-center">Automatically analyze the sentiment of reviews to identify positive, neutral, and negative feedback.</p>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card h-100 p-4">
+                    <div class="feature-icon mx-auto">
+                        <i class="fas fa-file-export"></i>
+                    </div>
+                    <h3 class="h5 text-center">Data Export</h3>
+                    <p class="text-muted text-center">Export review data to CSV format for further analysis in your preferred tools.</p>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card h-100 p-4">
+                    <div class="feature-icon mx-auto">
+                        <i class="fas fa-filter"></i>
+                    </div>
+                    <h3 class="h5 text-center">Advanced Filtering</h3>
+                    <p class="text-muted text-center">Filter reviews by sentiment to focus on specific types of feedback.</p>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card h-100 p-4">
+                    <div class="feature-icon mx-auto">
+                        <i class="fas fa-balance-scale"></i>
+                    </div>
+                    <h3 class="h5 text-center">App Comparison</h3>
+                    <p class="text-muted text-center">Compare multiple apps side by side to see how they stack up against each other.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Apps Section -->
+        <div class="recent-apps">
+            <h3 class="mb-3">Recently Analyzed Apps</h3>
+            <div id="recentApps">
+                {% if recent_apps %}
+                    {% for app in recent_apps %}
+                        <a href="{{ url_for('app_reviews', app_id=app.id) }}" class="app-badge">
+                            <i class="fas fa-mobile-alt me-2"></i>{{ app.name }}
+                        </a>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">No recently analyzed apps</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- App Details Modal -->
+    <div class="modal fade" id="appDetailsModal" tabindex="-1" aria-labelledby="appDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appDetailsModalLabel">App Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <img id="appIcon" src="" alt="App Icon" class="img-fluid rounded mb-3" style="max-width: 150px;">
+                            <div class="d-grid gap-2">
+                                <a id="appStoreLink" href="#" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="fab fa-google-play me-1"></i> View on Play Store
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <h4 id="appTitle" class="mb-2"></h4>
+                            <p id="appDeveloper" class="text-muted mb-2"></p>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <div id="appRatingStars" class="me-2"></div>
+                                    <span id="appRating" class="fw-bold"></span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div id="appRatingBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-6 col-md-4">
+                                    <div class="border rounded p-2 text-center">
+                                        <small class="text-muted d-block">Downloads</small>
+                                        <span id="appDownloads" class="fw-bold"></span>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="border rounded p-2 text-center">
+                                        <small class="text-muted d-block">Category</small>
+                                        <span id="appCategory" class="fw-bold"></span>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4 mt-2 mt-md-0">
+                                    <div class="border rounded p-2 text-center">
+                                        <small class="text-muted d-block">Last Updated</small>
+                                        <span id="appUpdated" class="fw-bold"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6>Description</h6>
+                            <p id="appDescription" class="small text-muted" style="max-height: 150px; overflow-y: auto;"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" id="analyzeAppBtn" class="btn btn-primary">
+                        <i class="fas fa-chart-bar me-1"></i> Analyze Reviews
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center">
+        <div class="container">
+            <p>© 2023 App Review Analyzer. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize toasts
+            var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+            var toastList = toastElList.map(function(toastEl) {
+                var toast = new bootstrap.Toast(toastEl, {
+                    autohide: true,
+                    delay: 5000
+                });
+                toast.show();
+                return toast;
+            });
+
+            // App details modal functionality
+            const appForm = document.getElementById('appForm');
+            const appIdInput = document.getElementById('app_id');
+            const checkAppDetailsBtn = document.getElementById('checkAppDetailsBtn');
+            const analyzeAppBtn = document.getElementById('analyzeAppBtn');
+            const appDetailsModal = new bootstrap.Modal(document.getElementById('appDetailsModal'));
+
+            // Handle Check App Details button click
+            checkAppDetailsBtn.addEventListener('click', function() {
+                const appId = appIdInput.value.trim();
+                if (!appId) {
+                    showToast('danger', 'Please enter an app ID');
+                    return;
+                }
+
+                // Show loading state
+                checkAppDetailsBtn.disabled = true;
+                checkAppDetailsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...';
+
+                // Fetch app details
+                fetchAppDetails(appId);
+            });
+
+            // Handle Analyze App button click in modal
+            analyzeAppBtn.addEventListener('click', function() {
+                appForm.submit();
+            });
+
+            function fetchAppDetails(appId) {
+                // Clean up app ID if it's a URL
+                if (appId.includes('play.google.com') && appId.includes('id=')) {
+                    try {
+                        appId = appId.split('id=')[1].split('&')[0];
+                    } catch (e) {
+                        showToast('danger', 'Invalid Google Play URL');
+                        resetCheckButton();
+                        return;
+                    }
+                }
+
+                // Make API call to fetch app details
+                fetch('/app_info/' + appId)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch app details');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            displayAppDetails(data.app_info, appId);
+                            appDetailsModal.show();
+                        } else {
+                            showToast('danger', data.message || 'Failed to fetch app details');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showToast('danger', 'Error fetching app details: ' + error.message);
+                    })
+                    .finally(() => {
+                        resetCheckButton();
+                    });
+            }
+
+            function displayAppDetails(appInfo, appId) {
+                // Update app ID in form
+                appIdInput.value = appId;
+
+                // Set app details in modal
+                document.getElementById('appTitle').textContent = appInfo.title || 'Unknown App';
+                document.getElementById('appDeveloper').textContent = appInfo.developer || '';
+                document.getElementById('appDescription').textContent = appInfo.description || 'No description available';
+                document.getElementById('appDownloads').textContent = appInfo.installs || 'Unknown';
+                document.getElementById('appCategory').textContent = appInfo.genre || 'Unknown';
+                document.getElementById('appUpdated').textContent = formatDate(appInfo.updated) || 'Unknown';
+
+                // Set app icon
+                const appIcon = document.getElementById('appIcon');
+                if (appInfo.icon) {
+                    appIcon.src = appInfo.icon;
+                    appIcon.style.display = 'block';
+                } else {
+                    appIcon.style.display = 'none';
+                }
+
+                // Set app store link
+                const appStoreLink = document.getElementById('appStoreLink');
+                appStoreLink.href = `https://play.google.com/store/apps/details?id=${appId}`;
+
+                // Set rating
+                const rating = parseFloat(appInfo.score) || 0;
+                document.getElementById('appRating').textContent = rating.toFixed(1);
+                document.getElementById('appRatingBar').style.width = `${(rating / 5) * 100}%`;
+
+                // Generate rating stars
+                const appRatingStars = document.getElementById('appRatingStars');
+                appRatingStars.innerHTML = '';
+                for (let i = 1; i <= 5; i++) {
+                    const star = document.createElement('i');
+                    if (i <= Math.floor(rating)) {
+                        star.className = 'fas fa-star text-warning';
+                    } else if (i - 0.5 <= rating) {
+                        star.className = 'fas fa-star-half-alt text-warning';
+                    } else {
+                        star.className = 'far fa-star text-warning';
+                    }
+                    appRatingStars.appendChild(star);
+                    if (i < 5) {
+                        appRatingStars.appendChild(document.createTextNode(' '));
+                    }
+                }
+            }
+
+            function resetCheckButton() {
+                checkAppDetailsBtn.disabled = false;
+                checkAppDetailsBtn.innerHTML = '<i class="fas fa-info-circle me-2"></i>Check App Details';
+            }
+
+            function formatDate(timestamp) {
+                if (!timestamp) return '';
+                try {
+                    const date = new Date(timestamp);
+                    return date.toLocaleDateString();
+                } catch (e) {
+                    return timestamp.toString();
+                }
+            }
+
+            function showToast(type, message) {
+                const toastContainer = document.querySelector('.toast-container');
+
+                const toastEl = document.createElement('div');
+                toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+                toastEl.setAttribute('role', 'alert');
+                toastEl.setAttribute('aria-live', 'assertive');
+                toastEl.setAttribute('aria-atomic', 'true');
+
+                toastEl.innerHTML = `
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+
+                toastContainer.appendChild(toastEl);
+
+                const toast = new bootstrap.Toast(toastEl, {
+                    autohide: true,
+                    delay: 5000
+                });
+
+                toast.show();
+
+                // Remove toast from DOM after it's hidden
+                toastEl.addEventListener('hidden.bs.toast', function() {
+                    toastEl.remove();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
